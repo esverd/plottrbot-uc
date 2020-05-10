@@ -45,8 +45,6 @@ int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to 
 
 const int SPEED_MICRO_S = 120;    //changes speed
 
-float otherMotorThreshold = 0;
-
 float currentX = homeX;
 float currentY = homeY;
 
@@ -175,105 +173,7 @@ void handleGCODE()
 
 void loop() 
 {
-
   readSerial();
-
-  
-  //GJELDENDE
-  // int ogX = homeX;
-  // int ogY = homeY;
-  // int downStep = 40;
-  // int allRight = homeX + 250;
-  // int allLeft = homeX - 250;
-
-  
-  // servoPenDraw(true);
-  // delay(5*1000);
-  // interpolateToPosition(homeX, homeY, 350, homeY);
-  // delay(5*1000);
-  // interpolateToPosition(350, homeY, homeX, homeY);
-  // delay(5*1000);
-  // moveToPosition(homeX, homeY, 350, homeY);
-  // delay(5*1000);
-  // moveToPosition(350, homeY, homeX, homeY);
-  // delay(30*1000);
-
-  //cross
-  // servoPenDraw(true);
-  // interpolateToPosition(homeX, homeY, homeX, homeY+400);
-  // delay(5*1000);
-  // interpolateToPosition(homeX, homeY+400, homeX, homeY+100);
-  // delay(5*1000);
-  // interpolateToPosition(homeX, homeY+100, allRight, homeY+100);
-  // delay(5*1000);
-  // interpolateToPosition(allRight, homeY+100, allLeft, homeY+100);
-  // delay(5*1000);
-  // interpolateToPosition(allLeft, homeY+100, homeX, homeY+100);
-  // delay(5*1000);
-  // interpolateToPosition(homeX, homeY+100, homeX, homeY);
-  // servoPenDraw(false);
-  
-  //diamond
-  // servoPenDraw(true);
-  // interpolateToPosition(homeX, homeY, allRight, homeY+100); 
-  // delay(5*1000);
-  // interpolateToPosition(allRight, homeY+100, homeX, homeY+200); 
-  // delay(5*1000);
-  // interpolateToPosition(homeX, homeY+200, allLeft, homeY+100);
-  // delay(5*1000);
-  // interpolateToPosition(allLeft, homeY+100, homeX, homeY);
-  // servoPenDraw(false);
-
-  // delay(10*1000);
-  //drake
-  // servoPenDraw(true);
-  // interpolateToPosition(homeX, homeY, allRight, homeY+100);
-  // delay(5*1000);
-  // interpolateToPosition(allRight, homeY+100, homeX, homeY+400);
-  // delay(5*1000);
-  // interpolateToPosition(homeX, homeY+400, allLeft, homeY+100);
-  // delay(5*1000);
-  // interpolateToPosition(allLeft, homeY+100, homeX, homeY);
-  // servoPenDraw(false);
-
-
-  
-
-  // delay(10*1000);
-  // interpolateToPosition(homeX, homeY, allLeft, homeY);
-  // delay(5*1000);
-  // interpolateToPosition(allLeft, homeY, homeX, homeY);
-  // delay(5*1000);
-  // interpolateToPosition(homeX, homeY, allRight, homeY);
-  // delay(5*1000);
-  // interpolateToPosition(allRight, homeY, allLeft, homeY);
-  // delay(5*1000);
-  // interpolateToPosition(allLeft, homeY, homeX, homeY);
-
-  //left to right with downwards steps
-  // for (int i = 0; i < 3; i++)
-  // {
-  //   delay(10*1000);
-  //   interpolateToPosition(homeX, homeY, allRight, homeY);
-  //   delay(5*1000);
-  //   interpolateToPosition(allRight, homeY, allLeft, homeY);
-  //   delay(5*1000);
-  //   interpolateToPosition(allLeft, homeY, homeX, homeY);
-  //   delay(5*1000);
-  //   interpolateToPosition(homeX, homeY, homeX, homeY+downStep);
-  //   homeY += downStep;
-  // }
-  // interpolateToPosition(homeX, homeY, ogX, ogY);
-  // homeX = ogX;
-  // homeY = ogY;
-
-  // delay(10*1000);
-  // interpolateToPosition(homeX, homeY, allRight, homeY);
-  // delay(5*1000);
-  // interpolateToPosition(allRight, homeY, allLeft, homeY);
-  // delay(5*1000);
-  // interpolateToPosition(allLeft, homeY, homeX, homeY);
-
 }
 
 //move to coordinates in a straight line
@@ -294,8 +194,6 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
 
     currentX = x1;    //saves the new position. needs to happen before scaling
     currentY = y1;    //saves the new position. needs to happen before scaling
-
-    otherMotorThreshold = 0;
 
 // G1 X1100 Y200
     // x0 *= sqrt(pow(x0 - homeX, 2))*scaleX;
@@ -407,62 +305,22 @@ void moveToPosition(float x0, float y0, float x1, float y1)
 
   float nSteps = deltaAbsMax / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
 
-  // float otherMotorThreshold = 0;  //used to trigger when the motor with shortest distance needs to move
+  float otherMotorThreshold = 0;  //used to trigger when the motor with shortest distance needs to move
   float movementRatio = deltaAbsMin / deltaAbsMax;
-  // Serial.println(deltaAbsMin);
-  // Serial.println(deltaAbsMax);
-  // Serial.println(movementRatio);
-  // Serial.println();
 
-  //Serial.println("----START----");    //debug
-  // int currentHl = hL0;    //debug
-  // float nowHl = hL0;    //debug
-  // float nowHr = hR0;    //debug
-  //for (float i = 0; i < deltaAbsMax; i+= Ts)   //moves the motor     //ser ut som jeg må bytte ut deltaAbsMax med 2*deltaAbsMax
   for (int i = 0; i < nSteps; i++)          //disse to måtene å kjøre for-løkke på gir nøyaktig samme resultat
   {
     pulseMotor(leftIsLongest, motorDirLong);    //moves the motor with the longest distance one step
     otherMotorThreshold += movementRatio;   //increments the threshold determining when the shortest distance motor needs to move
-    // nowHl += Ts;    //debug
 
     if(otherMotorThreshold >= 1)
     {
       pulseMotor(!leftIsLongest, motorDirShort);    //moves the shortest distance motor one step
       otherMotorThreshold -= 1;
-      // nowHr += Ts;    //debug
     }
 
-    // if( (int)nowHl > currentHl )    //debug
-    // {
-    //   //printXYfromHypo(nowHl, nowHr);
-    //   currentHl = (int)nowHl;
-    // }
   }
-  //Serial.println("----END----");    //debug
-  
 
-  
-  
-  // for (float i = 0; i < deltaAbsMax; i+= Ts)   //moves the motor     //ser ut som jeg må bytte ut deltaAbsMax med 2*deltaAbsMax
-  // {
-  //   pulseMotor(leftIsLongest, motorDirLong);    //moves the motor with the longest distance one step
-  //   otherMotorThreshold += movementRatio;   //increments the threshold determining when the shortest distance motor needs to move
-  //   nowHl += Ts;    //debug
-
-  //   if(otherMotorThreshold >= 1)
-  //   {
-  //     pulseMotor(!leftIsLongest, motorDirShort);    //moves the shortest distance motor one step
-  //     otherMotorThreshold -= 1;
-  //     nowHr += Ts;    //debug
-  //   }
-    
-
-  //   if( (int)nowHl > currentHl )    //debug
-  //   {
-  //     printXYfromHypo(nowHl, nowHr);
-  //     currentHl = (int)nowHl;
-  //   }
-  // }
 
 }
 
@@ -494,35 +352,6 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
   }
 
 }
-
-
-
-
-// void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step
-// {
-//   int stepPin;
-//   //selects the proper motor pin and direction pin based on boolean input in function
-//   if(leftMotor)
-//   {
-//     // stepPin = stepPinL;
-//     leftStepperMotor.shaft(!moveDown);
-//     // leftStep.disableOutputs();
-//     // stepper.move(100*steps_per_mm); // Move 100mm
-//     leftStep.move(1*(1/Ts)); // Move 100mm
-//     // leftStep.enableOutputs();
-//     leftStep.run();
-//   }
-//   else
-//   {
-//     // stepPin = stepPinR;
-//     rightStepperMotor.shaft(moveDown);
-//     // rightStep.disableOutputs();
-//     rightStep.move(1*(1/Ts)); // Move 100mm
-//     // rightStep.enableOutputs();
-//     rightStep.run();
-//   }
-
-// }
 
 
 // void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step    TMC2130
@@ -659,75 +488,3 @@ float getYfromHypo(float hL, float hR)    //used for debugging
   return sqrt(pow(hL, 2) - pow(x, 2));
 }
 
-
-// void interpolateToPosition(int x0, int y0, int x1, int y1)
-// {
-//   incDivider = 100.0;
-//   int stepSize = 10;
-//   // float Tl = sqrt( pow(x1 - x0, 2) + pow(y1 - y0, 2) );
-//   // float divTl = Tl / incDivider;
-//   float deltaX = x1 - x0;
-//   float deltaY = y1 - y0;
-//   //deltaX *= scaleX;
-//   //deltaY *= scaleY;
-
-//   // int ogX = x1;
-//   // int ogY = y1;
-
-//   for (int i = 0; i < incDivider; i++)
-//   {
-//     x1 = x0 + (deltaX / incDivider);
-//     y1 = y1 + (deltaY / incDivider);
-//     // Serial.print("Current xy pair: ");
-//     // Serial.print(x1);
-//     // Serial.print(", ");
-//     // Serial.print(y1);
-//     // Serial.print("    Original xy pair: ");
-//     // Serial.print(ogX);
-//     // Serial.print(", ");
-//     // Serial.println(ogY);
-//     moveToPosition(x0, y0, x1, y1);
-//     x0 = x1;
-//     y0 = y1;
-//   }
-
-  // for (int i = 0; i < incDivider; i++)
-    // {
-    //   // x1 = x0 + divTl*cos(theta)*signX;
-    //   // y1 = y0 + divTl*sin(theta)*signY;
-    //   x1 = x0 + stepSize*cos(theta)*signX;
-    //   y1 = y0 + stepSize*sin(theta)*signY;
-    //   moveToPosition(x0, y0, x1, y1);
-    //   x0 = x1;
-    //   y0 = y1;
-    // }
-
-// }
-
-
-
-// void runMotor(bool leftMotor, int nSteps, bool moveDown)
-// {
-//   int stepPin, dirPin;
-//   if(leftMotor)
-//   {
-//     stepPin = stepPinL;
-//     dirPin = dirPinL;
-//   }
-//   else
-//   {
-//     stepPin = stepPinR;
-//     dirPin = dirPinR;
-//     moveDown = !moveDown;
-//   }
-
-//   digitalWrite(dirPin, moveDown);
-//   for (int i = 0; i < nSteps; i++)
-//   {
-//     digitalWrite(stepPin, HIGH);
-//     delayMicroseconds(30);
-//     digitalWrite(stepPin, LOW);
-//     delayMicroseconds(30);
-//   }
-  
-// }
