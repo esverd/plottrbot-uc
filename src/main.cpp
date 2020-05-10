@@ -19,8 +19,8 @@ const int servoPin = 10;
 //-------MOTOR CONFIG-------
 Servo penServo;  // create servo object to control a servo
 float r_sense = 0.11;
-// TMC2130Stepper leftStepperMotor(csPinL, r_sense);                           // Hardware SPI
-// TMC2130Stepper rightStepperMotor(csPinR, r_sense);                           // Hardware SPI  
+TMC2130Stepper leftStepperMotor(csPinL, r_sense);                           // Hardware SPI
+TMC2130Stepper rightStepperMotor(csPinR, r_sense);                           // Hardware SPI  
 
 // AccelStepper leftStep = AccelStepper(leftStep.DRIVER, stepPinL, dirPinL);
 // AccelStepper rightStep = AccelStepper(rightStep.DRIVER, stepPinR, dirPinR);
@@ -83,33 +83,21 @@ void setup()
   pinMode(enablePinLR, OUTPUT);
   digitalWrite(enablePinLR, LOW);      // Enable driver in hardware
   
+  SPI.begin();                    // SPI drivers
 
-  // SPI.begin();                    // SPI drivers
+  leftStepperMotor.begin();                 //  SPI: Init CS pins and possible SW SPI pins
+  // leftStepperMotor.toff(5);                 // Enables driver in software
+  leftStepperMotor.rms_current(700);        // Set motor RMS current
+  leftStepperMotor.microsteps(16);          // Set microsteps to 1/16th
+  leftStepperMotor.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160
+  leftStepperMotor.pwm_autoscale(true);     // Needed for stealthChop
 
-  //.setMicrostepsPerStep(16)
-  //.setRunCurrent(700)
-  //.enableStealthChop()
-  //.disableStealthChop()
-
-
-
-
-
-
-  // leftStepperMotor.begin();                 //  SPI: Init CS pins and possible SW SPI pins
-  // // leftStepperMotor.toff(5);                 // Enables driver in software
-  // leftStepperMotor.rms_current(700);        // Set motor RMS current
-  // leftStepperMotor.microsteps(16);          // Set microsteps to 1/16th
-  // leftStepperMotor.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160
-  // leftStepperMotor.pwm_autoscale(true);     // Needed for stealthChop
-
-
-  // rightStepperMotor.begin();                 //  SPI: Init CS pins and possible SW SPI pins
-  // // rightStepperMotor.toff(5);                 // Enables driver in software
-  // rightStepperMotor.rms_current(700);        // Set motor RMS current
-  // rightStepperMotor.microsteps(16);          // Set microsteps to 1/16th
-  // rightStepperMotor.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160   skal egentlig være true for stealthchop
-  // rightStepperMotor.pwm_autoscale(true);     // Needed for stealthChop
+  rightStepperMotor.begin();                 //  SPI: Init CS pins and possible SW SPI pins
+  // rightStepperMotor.toff(5);                 // Enables driver in software
+  rightStepperMotor.rms_current(700);        // Set motor RMS current
+  rightStepperMotor.microsteps(16);          // Set microsteps to 1/16th
+  rightStepperMotor.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160   skal egentlig være true for stealthchop
+  rightStepperMotor.pwm_autoscale(true);     // Needed for stealthChop
 
 
   // leftStepperMotor.blank_time(16);
@@ -404,13 +392,12 @@ void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step
   {
     stepPin = stepPinL;
     dirPin = dirPinL;
-    
+    moveDown = !moveDown;
   }
   else
   {
     stepPin = stepPinR;
     dirPin = dirPinR;
-    moveDown = !moveDown;
   }
 
   //sends pulse to selected motor
