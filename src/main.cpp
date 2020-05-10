@@ -3,27 +3,13 @@
 #include <Arduino.h>
 #include <Servo.h>
 
-
 //-------PIN I/O-------
-const int enablePinLR = 2;
 const int stepPinL = 3; 
 const int dirPinL = 4; 
-const int csPinL = 7; 
 const int stepPinR = 5; 
 const int dirPinR = 6; 
-const int csPinR = 8; 
-
-
-const int servoPin = 10;
-
-//-------MOTOR CONFIG-------
 Servo penServo;  // create servo object to control a servo
-float r_sense = 0.11;
-// TMC2130Stepper leftStepperMotor(csPinL, r_sense);                           // Hardware SPI
-// TMC2130Stepper rightStepperMotor(csPinR, r_sense);                           // Hardware SPI  
 
-// AccelStepper leftStep = AccelStepper(leftStep.DRIVER, stepPinL, dirPinL);
-// AccelStepper rightStep = AccelStepper(rightStep.DRIVER, stepPinR, dirPinR);
 
 
 //-------CALIBRATION-------
@@ -31,13 +17,14 @@ unsigned int canvasWidth = 1460;    //width between center of the two motor axis
 unsigned int canvasHeight = 1000;   //TODO bruke denne variabelen for å ikke gå utenfor maks høyde. brukes til å oppgi maks høyde med vekt på belte
 float homeX = (canvasWidth / 2.0);
 float homeY = 200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
+//float incDivider = 300.0;
 //speed or delay in microSeconds
 
-float diameterPulley = 12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
-float Ts = diameterPulley*PI/3200.0;    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
+float diameterPulley = 12.723;    //in mm     //TODO justere på denne. vurdere 12.2mm ?
+float Ts = diameterPulley*PI/3200.0;
 
-// float scaleX = 70/73.0;
-// float scaleY = 1.0;
+float scaleX = 70/73.0;
+float scaleY = 1.0;
 
 const int servoPosDraw = 150;     //servo position when the pen touches the canvas
 const int servoPosNoDraw = 100;   //servo position when the pen doesn't touch the canvas
@@ -45,7 +32,7 @@ int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to 
 
 const int SPEED_MICRO_S = 120;    //changes speed
 
-float otherMotorThreshold = 0;
+//float otherMotorThreshold = 0;
 
 float currentX = homeX;
 float currentY = homeY;
@@ -73,53 +60,14 @@ void commandG1();
 void setup() 
 {
   Serial.begin(9600);
-  penServo.attach(servoPin);
+  // Sets the four pins as Outputs
+  pinMode(stepPinL, OUTPUT); 
+  pinMode(dirPinL, OUTPUT);
+  pinMode(stepPinR, OUTPUT); 
+  pinMode(dirPinR, OUTPUT);
+  penServo.attach(9);
   Serial.println("Starting");
   servoPenDraw(false);      //starts with the pen not touching the canvas
-
-  //-------stepper motor setup-------
-  pinMode(stepPinL, OUTPUT);
-  pinMode(dirPinL, OUTPUT);
-  pinMode(stepPinR, OUTPUT);
-  pinMode(dirPinR, OUTPUT);
-  pinMode(enablePinLR, OUTPUT);
-  digitalWrite(enablePinLR, LOW);      // Enable driver in hardware
-  
-
-  // SPI.begin();                    // SPI drivers
-
-  // leftStepperMotor.begin();                 //  SPI: Init CS pins and possible SW SPI pins
-  // // leftStepperMotor.toff(5);                 // Enables driver in software
-  // leftStepperMotor.rms_current(700);        // Set motor RMS current
-  // leftStepperMotor.microsteps(16);          // Set microsteps to 1/16th
-  // leftStepperMotor.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160
-  // leftStepperMotor.pwm_autoscale(true);     // Needed for stealthChop
-
-
-  // rightStepperMotor.begin();                 //  SPI: Init CS pins and possible SW SPI pins
-  // // rightStepperMotor.toff(5);                 // Enables driver in software
-  // rightStepperMotor.rms_current(700);        // Set motor RMS current
-  // rightStepperMotor.microsteps(16);          // Set microsteps to 1/16th
-  // rightStepperMotor.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160   skal egentlig være true for stealthchop
-  // rightStepperMotor.pwm_autoscale(true);     // Needed for stealthChop
-
-
-  // leftStepperMotor.blank_time(16);
-  // rightStepperMotor.blank_time(16);
-  // leftStepperMotor.ihold(0...31);    //konfigurere denne senere
-  // rightStepperMotor.ihold(0...31);    //konfigurere denne senere
-  // leftStep.setMaxSpeed(50*(1/Ts)); // 100mm/s @ 80 steps/mm
-  // leftStep.setAcceleration(1000*(1/Ts)); // 2000mm/s^2
-  // leftStep.setEnablePin(enablePinLR);
-  // leftStep.setPinsInverted(false, false, true);
-  // leftStep.enableOutputs();
-  // rightStep.setMaxSpeed(50*(1/Ts)); // 100mm/s @ 80 steps/mm
-  // rightStep.setAcceleration(1000*(1/Ts)); // 2000mm/s^2
-  // rightStep.setEnablePin(enablePinLR);
-  // rightStep.setPinsInverted(false, false, true);
-  // rightStep.enableOutputs();
-
-
 }
 
 
@@ -185,18 +133,6 @@ void loop()
   // int downStep = 40;
   // int allRight = homeX + 250;
   // int allLeft = homeX - 250;
-
-  
-  // servoPenDraw(true);
-  // delay(5*1000);
-  // interpolateToPosition(homeX, homeY, 350, homeY);
-  // delay(5*1000);
-  // interpolateToPosition(350, homeY, homeX, homeY);
-  // delay(5*1000);
-  // moveToPosition(homeX, homeY, 350, homeY);
-  // delay(5*1000);
-  // moveToPosition(350, homeY, homeX, homeY);
-  // delay(30*1000);
 
   //cross
   // servoPenDraw(true);
@@ -295,7 +231,7 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
     currentX = x1;    //saves the new position. needs to happen before scaling
     currentY = y1;    //saves the new position. needs to happen before scaling
 
-    otherMotorThreshold = 0;
+    
 
 // G1 X1100 Y200
     // x0 *= sqrt(pow(x0 - homeX, 2))*scaleX;
@@ -311,17 +247,17 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
     // deltaY *= scaleY;
 
     float Tl = sqrt( pow(deltaX, 2) + pow(deltaY, 2) );   //total length to move
-    // float theta = atan(deltaY / deltaX);    //angle between the two points
+    // float theta = atan(deltaY / deltaX);    //angl between the two points
       
-    float distanceMoved = 0.0;
+    float currentHypo = 0.0;
     float stepSize = 10.0;    //max distance in mm the robot sends to the function moveToPosition
       //by breaking the total length in smaller steps the line is kept straight, instead of getting a curve
       //which happens when whole distance is sent to moveToPosition
     
-    while(distanceMoved < Tl)   //while the robot has not moved the total length
+    while(currentHypo < Tl)   //while the robot has not moved the total length
     {
-      if(distanceMoved > Tl - stepSize)   //exit case: if less than 10mm is left to move
-        stepSize = Tl - distanceMoved;    //set the stepSize equal to whatever length less than 10mm is left to move
+      if(currentHypo > Tl - stepSize)   //exit case: if less than 10mm is left to move
+        stepSize = Tl - currentHypo;    //set the stepSize equal to whatever length less than 10mm is left to move
 
       // x1 = x0 + stepSize*cos(theta)*signX;
       // y1 = y0 + stepSize*sin(theta);    //trenger ikke forttegn på y
@@ -331,11 +267,11 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
       moveToPosition(x0, y0, x1, y1);     //moves 10mm on the road to the total distance
       x0 = x1;      //updates the start point for the next 10mm line
       y0 = y1;      //updates the start point for the next 10mm line
-      distanceMoved += stepSize;      //updates the length moved so far
+      currentHypo += stepSize;      //updates the length moved so far
 
-      //distanceMoved = sqrt( pow(x1, 2) + pow(y1, 2) );
-      // Serial.print("distanceMoved = ");
-      // Serial.print(distanceMoved);
+      //currentHypo = sqrt( pow(x1, 2) + pow(y1, 2) );
+      // Serial.print("currentHypo = ");
+      // Serial.print(currentHypo);
       // Serial.print("    Tl = ");
       // Serial.println(Tl);
     }
@@ -407,7 +343,7 @@ void moveToPosition(float x0, float y0, float x1, float y1)
 
   float nSteps = deltaAbsMax / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
 
-  // float otherMotorThreshold = 0;  //used to trigger when the motor with shortest distance needs to move
+  float otherMotorThreshold = 0;  //used to trigger when the motor with shortest distance needs to move
   float movementRatio = deltaAbsMin / deltaAbsMax;
   // Serial.println(deltaAbsMin);
   // Serial.println(deltaAbsMax);
@@ -498,66 +434,9 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
 
 
 
-// void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step
-// {
-//   int stepPin;
-//   //selects the proper motor pin and direction pin based on boolean input in function
-//   if(leftMotor)
-//   {
-//     // stepPin = stepPinL;
-//     leftStepperMotor.shaft(!moveDown);
-//     // leftStep.disableOutputs();
-//     // stepper.move(100*steps_per_mm); // Move 100mm
-//     leftStep.move(1*(1/Ts)); // Move 100mm
-//     // leftStep.enableOutputs();
-//     leftStep.run();
-//   }
-//   else
-//   {
-//     // stepPin = stepPinR;
-//     rightStepperMotor.shaft(moveDown);
-//     // rightStep.disableOutputs();
-//     rightStep.move(1*(1/Ts)); // Move 100mm
-//     // rightStep.enableOutputs();
-//     rightStep.run();
-//   }
-
-// }
-
-
-// void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step    TMC2130
-// {
-//   int stepPin;
-//   //selects the proper motor pin and direction pin based on boolean input in function
-//   if(leftMotor)
-//   {
-//     stepPin = stepPinL;
-//     leftStepperMotor.shaft(!moveDown);
-//   }
-//   else
-//   {
-//     stepPin = stepPinR;
-//     rightStepperMotor.shaft(moveDown);
-//   }
-//   //sends pulse to selected motor
-//   digitalWrite(stepPin, HIGH);
-//   delayMicroseconds(SPEED_MICRO_S);            
-//   digitalWrite(stepPin, LOW);
-//   delayMicroseconds(SPEED_MICRO_S);
-
-//   // Run 5000 steps and switch direction in software
-//   // for (uint16_t i = 5000; i>0; i--) {
-//   //   digitalWrite(STEP_PIN, HIGH);
-//   //   delayMicroseconds(160);
-//   //   digitalWrite(STEP_PIN, LOW);
-//   //   delayMicroseconds(160);
-//   // }
-//   // shaft = !shaft;
-//   // driver.shaft(shaft);
-// }
 
 //lage pulseMotor som kun pulser ett steg
-void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step    //A4988
+void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step
 {
   int stepPin, dirPin;
   //selects the proper motor pin and direction pin based on boolean input in function
@@ -565,7 +444,6 @@ void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step
   {
     stepPin = stepPinL;
     dirPin = dirPinL;
-    
   }
   else
   {
