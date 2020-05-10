@@ -2,8 +2,7 @@
 
 #include <Arduino.h>
 #include <Servo.h>
-// #include <TMCStepper.h>
-// #include <TMC2130.h>
+#include <TMCStepper.h>   //needs to be my fork which has some important changes for stepper motor driving
 
 
 //-------PIN I/O-------
@@ -14,7 +13,6 @@ const int csPinL = 7;
 const int stepPinR = 5; 
 const int dirPinR = 6; 
 const int csPinR = 8; 
-
 
 const int servoPin = 10;
 
@@ -87,6 +85,16 @@ void setup()
   
 
   // SPI.begin();                    // SPI drivers
+
+  //.setMicrostepsPerStep(16)
+  //.setRunCurrent(700)
+  //.enableStealthChop()
+  //.disableStealthChop()
+
+
+
+
+
 
   // leftStepperMotor.begin();                 //  SPI: Init CS pins and possible SW SPI pins
   // // leftStepperMotor.toff(5);                 // Enables driver in software
