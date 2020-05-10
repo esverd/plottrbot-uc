@@ -1,0 +1,71 @@
+{
+    "configurations": [
+        {
+            "name": "!!! WARNING !!! AUTO-GENERATED FILE, PLEASE DO NOT MODIFY IT AND USE https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags"
+        },
+        {
+            "name": "Win32",
+            "includePath": [
+                "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/.pio/libdeps/uno/Servo_ID883/src",
+                "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/.pio/libdeps/uno/TMCStepper_ID5513/src",
+                "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SPI/src",
+                "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SoftwareSerial/src",
+                "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/.pio/libdeps/uno/AccelStepper_ID265/src",
+                "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/.pio/libdeps/uno/TMC2130Stepper_ID1493/src",
+                "C:/Users/eirik/.platformio/lib/Adafruit IO Arduino_ID714/src",
+                "C:/Users/eirik/.platformio/lib/Low-Power_ID38",
+                "C:/Users/eirik/.platformio/lib/RTClib_ID83",
+                "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/EEPROM/src",
+                "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/HID/src",
+                "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/Wire/src",
+                "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/include",
+                "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/src",
+                "C:/Users/eirik/.platformio/packages/framework-arduinoavr/cores/arduino",
+                "C:/Users/eirik/.platformio/packages/framework-arduinoavr/variants/standard",
+                "C:/Users/eirik/.platformio/packages/tool-unity",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/.pio/libdeps/uno/Servo_ID883/src",
+                    "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/.pio/libdeps/uno/TMCStepper_ID5513/src",
+                    "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SPI/src",
+                    "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SoftwareSerial/src",
+                    "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/.pio/libdeps/uno/AccelStepper_ID265/src",
+                    "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/.pio/libdeps/uno/TMC2130Stepper_ID1493/src",
+                    "C:/Users/eirik/.platformio/lib/Adafruit IO Arduino_ID714/src",
+                    "C:/Users/eirik/.platformio/lib/Low-Power_ID38",
+                    "C:/Users/eirik/.platformio/lib/RTClib_ID83",
+                    "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/EEPROM/src",
+                    "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/HID/src",
+                    "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/Wire/src",
+                    "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/include",
+                    "f:/CREATIVE PROJECTS/PlottrBot/mainCodeSketching/src",
+                    "C:/Users/eirik/.platformio/packages/framework-arduinoavr/cores/arduino",
+                    "C:/Users/eirik/.platformio/packages/framework-arduinoavr/variants/standard",
+                    "C:/Users/eirik/.platformio/packages/tool-unity",
+                    ""
+                ]
+            },
+            "defines": [
+                "PLATFORMIO=40303",
+                "ARDUINO_AVR_UNO",
+                "F_CPU=16000000L",
+                "ARDUINO_ARCH_AVR",
+                "ARDUINO=10805",
+                "__AVR_ATmega328P__",
+                ""
+            ],
+            "intelliSenseMode": "clang-x64",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "compilerPath": "C:/Users/eirik/.platformio/packages/toolchain-atmelavr/bin/avr-gcc.exe",
+            "compilerArgs": [
+                "-mmcu=atmega328p",
+                ""
+            ]
+        }
+    ],
+    "version": 4
+}
