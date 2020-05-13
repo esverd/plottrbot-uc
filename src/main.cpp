@@ -33,10 +33,11 @@ float homeX = (canvasWidth / 2.0);
 float homeY = 200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
 //speed or delay in microSeconds
 
-float diameterPulley = 12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
-float Ts = diameterPulley*PI/3200.0;    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
+float scaleTotalDistance = (73.0/70)*(54.3/55)*(55.0/57)*(55/55.5);
+float diameterPulley = 12.2; //12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
+float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
 
-// float scaleX = 70/73.0;
+// float scaleX = 77.6/70;
 // float scaleY = 1.0;
 
 const int servoPosDraw = 150;     //servo position when the pen touches the canvas
