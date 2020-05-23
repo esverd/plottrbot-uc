@@ -40,7 +40,7 @@ float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number
 // float scaleX = 77.6/70;
 // float scaleY = 1.0;
 
-const int servoPosDraw = 150;     //servo position when the pen touches the canvas
+const int servoPosDraw = 130;     //servo position when the pen touches the canvas
 const int servoPosNoDraw = 100;   //servo position when the pen doesn't touch the canvas
 int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to make sure the robot later boots by moving to noDrawPosition
 
@@ -326,16 +326,16 @@ void moveToPosition(float x0, float y0, float x1, float y1)
 void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fashion to avoid overshoots
 {
   int servoNewPos;    //the position the servo should move to
-  int delayMS;
+  int delayMS = 25;
   if(draw)
   {
     servoNewPos = servoPosDraw;
-    delayMS = 14;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
+    // delayMS = 10;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
   }
   else
   {
     servoNewPos = servoPosNoDraw;
-    delayMS = 8;
+    // delayMS = 7;
   }
 
   //increments or decrements the servo position until it's at the target position
@@ -349,6 +349,7 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
     penServo.write(servoPosCurrent);
     delay(delayMS);
   }
+  delay(100);
 
 }
 
