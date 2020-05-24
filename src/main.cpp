@@ -49,7 +49,16 @@ float currentX = homeX;
 float currentY = homeY;
 
 
-
+//-------SPEED SETTINGS-------
+const int DEFAULT_SPEED_DELAY = 110;
+const int SLOWEST_SPEED_DELAY = 800;
+float currentSpeedDelay = DEFAULT_SPEED_DELAY;
+float totalLineSteps = 0;      //used to store the toal motor pulses to move a line. necessary for accel and deccel
+float traveledSteps = 0.0;
+const int STEPS_TO_ACCEL_DECCEL = 300;
+// const int MM_TO_ACCEL_DECCEL = 20;
+// float totalMMtoTravel = 0.0;
+int accelMode = 0;      //0 = plain. 1 = accelerate. -1 = deccelerate
 
 
 //-------SERIAL COMMUNICATION-------
@@ -123,97 +132,46 @@ void setup()
 
 }
 
-//-------SPEED SETTINGS-------
-const int DEFAULT_SPEED_DELAY = 110;
-const int SLOWEST_SPEED_DELAY = 800;
-// const int DECELARTION_DELAY = 2;
-float currentSpeedDelay = DEFAULT_SPEED_DELAY;
-float totalLinePulses = 0;      //used to store the toal motor pulses to move a line. necessary for accel and deccel
-int sentPulses = 0;
-const int PULSES_TO_ACCEL_DECCEL = 100;
-
-int accelMode = 0;      //0 = plain. 1 = accelerate. -1 = deccelerate
 
 void handleAccel()
 {
+  float incDecToDelay = (SLOWEST_SPEED_DELAY - DEFAULT_SPEED_DELAY) / (float)STEPS_TO_ACCEL_DECCEL;   //the amount to decrease or increase step delay
+  // incDecToDelay = 1.8;
 
-  float decelerationDelay = (SLOWEST_SPEED_DELAY - DEFAULT_SPEED_DELAY) / (float)PULSES_TO_ACCEL_DECCEL;
-  decelerationDelay = 2;
+  // Serial.print("totalLineSteps  =  ");
+  // Serial.print(totalLineSteps);
+  // Serial.print("    traveledSteps  =  ");
+  // Serial.println(traveledSteps);
 
-  Serial.print("totalLinePulses  =  ");
-  Serial.print(totalLinePulses);
-
-  Serial.print("    sentPulses  =  ");
-  Serial.println(sentPulses);
-
-  if(sentPulses - PULSES_TO_ACCEL_DECCEL < 0)      //if its the first 300 pulses sent
+  if(traveledSteps - STEPS_TO_ACCEL_DECCEL < 0)      //if its the first steps in a new line
   {
-    accelMode = 1;
+    accelMode = 1;    //accelerate the movement
     currentSpeedDelay = SLOWEST_SPEED_DELAY;
-
-    Serial.println("ACCEL");
-    // currentSpeedDelay = SLOWEST_SPEED_DELAY - (sentPulses*DECELARTION_DELAY);
-    // if(currentSpeedDelay < DEFAULT_SPEED_DELAY)
-    //   currentSpeedDelay = DEFAULT_SPEED_DELAY;    //in case the delay got set to low
   }
+  if(traveledSteps + STEPS_TO_ACCEL_DECCEL > totalLineSteps)    //if its the last steps in the current line line
+    accelMode = -1;   //deccelerate the movement
 
-  if(sentPulses + PULSES_TO_ACCEL_DECCEL > totalLinePulses)    //if its the last 300 pulses to be sent
-  {
-    accelMode = -1;
 
-    // currentSpeedDelay = DEFAULT_SPEED_DELAY + DECELARTION_DELAY;
-    // if(currentSpeedDelay < DEFAULT_SPEED_DELAY)
-    //   currentSpeedDelay = DEFAULT_SPEED_DELAY;    //in case the delay got set to low
-    Serial.println("DECCEL");
-  }
-
-  // switch (accelMode)    //0 = plain. 1 = accelerate. -1 = deccelerate
-  // {
-  //   case 1:
-  //     currentSpeedDelay -= decelerationDelay;     //accelerates frequency of motor pulses
-  //     break;
-  //   case -1:
-  //     currentSpeedDelay += decelerationDelay;
-  //     break;
-  //   case 0:
-  //     break;
-  //   default:
-  //     break;
-  // }
-
-  // if(accelMode != 0)
-  //   currentSpeedDelay += accelMode*decelerationDelay;
   if(accelMode == 1)
   {
-    currentSpeedDelay -= decelerationDelay;     //accelerates frequency of motor pulses
-    if(currentSpeedDelay < DEFAULT_SPEED_DELAY)
+    currentSpeedDelay -= incDecToDelay;     //accelerates frequency of motor pulses
+    if(currentSpeedDelay < DEFAULT_SPEED_DELAY)   //if the speed delay gets set to outside limits
     {
       currentSpeedDelay = DEFAULT_SPEED_DELAY;
-      accelMode = 0;
+      accelMode = 0;      //stop acceleration process
     }
   }
   if(accelMode == -1)
   {
-    currentSpeedDelay += decelerationDelay;
+    currentSpeedDelay += incDecToDelay;   //if the speed delay gets set to outside limits
     if(currentSpeedDelay > SLOWEST_SPEED_DELAY)
     {
       currentSpeedDelay = SLOWEST_SPEED_DELAY;
-      accelMode = 0;
+      accelMode = 0;    //stop decceleration process
     }
   }
 
-  // if((currentSpeedDelay < DEFAULT_SPEED_DELAY) || (currentSpeedDelay > DEFAULT_SPEED_DELAY))
-  // {
-  //   currentSpeedDelay = DEFAULT_SPEED_DELAY;
-  //   accelMode = 0;
-  // }
-
-  sentPulses++;
-
-  // if(currentSpeedDelay > DEFAULT_SPEED_DELAY)   
-  //     currentSpeedDelay -= DECELARTION_DELAY;     //accelerates frequency of motor pulses
-  //   else if(currentSpeedDelay < DEFAULT_SPEED_DELAY)
-  //     currentSpeedDelay = DEFAULT_SPEED_DELAY;    //in case the delay got set to low
+  traveledSteps++;    //increment number of steps moved in the current line
 }
 
 void readSerial()
@@ -306,10 +264,11 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
     float Tl = sqrt( pow(deltaX, 2) + pow(deltaY, 2) );   //total length to move
     // float theta = atan(deltaY / deltaX);    //angle between the two points
 
+    // totalMMtoTravel = Tl;
+    // totalMMtoTravel = (float)Tl * Ts;
 
-
-    // totalLinePulses = (float)Tl / Ts;
-
+    //this block is needed for calculating number of steps which is needed for accel/deccel
+    //TODO use mm as units instead of number of motor steps
     float hL0 = sqrt( pow(x0, 2) + pow(y0, 2) );    //calculate beginning left hypotenuse
     float hR0 = sqrt( pow(canvasWidth - x0, 2) + pow(y0, 2) );    //calculate beginning right hypotenuse
     float hL1 = sqrt( pow(x1, 2) + pow(y1, 2) );        //calculate end left hypotenuse
@@ -317,10 +276,8 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
     float deltahL = hL1 - hL0;    //calculate the total new distance for the left motor to move
     float deltahR = hR1 - hR0;    //calculate the total new distance for the right motor to move
     float deltaAbsMax = max(abs(deltahL), abs(deltahR));    //the longest distance one motor needs to move to reach the final point
-    float nSteps = deltaAbsMax / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
-    totalLinePulses = nSteps;
-
-    sentPulses = 0;
+    totalLineSteps = deltaAbsMax / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
+    traveledSteps = 0;
 
       
     float distanceMoved = 0.0;
