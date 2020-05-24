@@ -6,11 +6,11 @@
         {
             "name": "Win32",
             "includePath": [
+                "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/AccelStepper_ID265/src",
                 "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/Servo_ID883/src",
                 "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/TMCStepper/src",
                 "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SoftwareSerial/src",
                 "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SPI/src",
-                "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/AccelStepper_ID265/src",
                 "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/TMC2130Stepper/src",
                 "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/TMC2130Stepper_ID1493/src",
                 "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/TMC2130_ID5823/src",
@@ -39,11 +39,11 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
+                    "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/AccelStepper_ID265/src",
                     "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/Servo_ID883/src",
                     "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/TMCStepper/src",
                     "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SoftwareSerial/src",
                     "C:/Users/eirik/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SPI/src",
-                    "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/AccelStepper_ID265/src",
                     "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/TMC2130Stepper/src",
                     "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/TMC2130Stepper_ID1493/src",
                     "f:/CREATIVE PROJECTS/PlottrBot/plottrbot-uc/plottrbot-uc/.pio/libdeps/uno/TMC2130_ID5823/src",
