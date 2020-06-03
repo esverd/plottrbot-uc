@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <TMCStepper.h>   //needs to be my fork which has some important changes for stepper motor driving
-#include <AccelStepper.h>
+// #include <AccelStepper.h>
 
 
 //-------PIN I/O-------
@@ -23,8 +23,8 @@ float r_sense = 0.11;
 TMC2130Stepper leftStepperDriver(csPinL, r_sense);                           // Hardware SPI
 TMC2130Stepper rightStepperDriver(csPinR, r_sense);                           // Hardware SPI  
 
-AccelStepper leftStep = AccelStepper(leftStep.DRIVER, stepPinL, dirPinL);
-AccelStepper rightStep = AccelStepper(rightStep.DRIVER, stepPinR, dirPinR);
+// AccelStepper leftStep = AccelStepper(leftStep.DRIVER, stepPinL, dirPinL);
+// AccelStepper rightStep = AccelStepper(rightStep.DRIVER, stepPinR, dirPinR);
 
 
 //-------CALIBRATION-------
@@ -41,8 +41,8 @@ float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number
 // float scaleX = 77.6/70;
 // float scaleY = 1.0;
 
-const int servoPosDraw = 150;     //servo position when the pen touches the canvas
-const int servoPosNoDraw = 100;   //servo position when the pen doesn't touch the canvas
+const int servoPosDraw = 100;     //servo position when the pen touches the canvas
+const int servoPosNoDraw = 150;   //servo position when the pen doesn't touch the canvas
 int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to make sure the robot later boots by moving to noDrawPosition
 
 float currentX = homeX;
@@ -50,12 +50,12 @@ float currentY = homeY;
 
 
 //-------SPEED SETTINGS-------
-const int DEFAULT_SPEED_DELAY = 110;
-const int SLOWEST_SPEED_DELAY = 800;
+const int DEFAULT_SPEED_DELAY = 100;    //110;    //100;
+const int SLOWEST_SPEED_DELAY = 280;    //300;    //750;
 float currentSpeedDelay = DEFAULT_SPEED_DELAY;
 float totalLineSteps = 0;      //used to store the toal motor pulses to move a line. necessary for accel and deccel
 float traveledSteps = 0.0;
-const int STEPS_TO_ACCEL_DECCEL = 300;
+const int STEPS_TO_ACCEL_DECCEL = 160;   //180   //300;
 // const int MM_TO_ACCEL_DECCEL = 20;
 // float totalMMtoTravel = 0.0;
 int accelMode = 0;      //0 = plain. 1 = accelerate. -1 = deccelerate
@@ -80,6 +80,7 @@ void readSerial();
 void handleGCODE();
 void commandG1();
 void handleAccel();
+String exctractCoordFromString(String, char);
 
 
 void setup() 
@@ -206,16 +207,30 @@ void handleGCODE()
   //eks: G1 X85.469 Y85.935
   //eks: G1 Z1
 
-   if(cmdBuffer.indexOf("G1") != -1 || cmdBuffer.indexOf("G01") != -1)
-   {
-     commandG1();   //moves the robot to the given coordinates
-   }
-   else if(cmdBuffer.indexOf("G28") != -1)    
-   {
-      // currentX = homeX;  //sets the current position to the home position
-      // currentY = homeY;
-      interpolateToPosition(currentX, currentY, homeX, homeY);    //moves to home position
-   }
+  if(cmdBuffer.indexOf("G1") != -1 || cmdBuffer.indexOf("G01") != -1)
+  {
+    commandG1();   //moves the robot to the given coordinates
+  }
+  else if(cmdBuffer.indexOf("G28") != -1)    
+  {
+    // currentX = homeX;  //sets the current position to the home position
+    // currentY = homeY;
+    interpolateToPosition(currentX, currentY, homeX, homeY);    //moves to home position
+  }
+  else if(cmdBuffer.indexOf("M17") != -1)   
+  digitalWrite(enablePinLR, LOW);       //enables power to stepper motors
+  else if(cmdBuffer.indexOf("M18") != -1)   
+    digitalWrite(enablePinLR, HIGH);    //disable power to stepper motors
+  else if(cmdBuffer.indexOf("G92") != -1)  
+  {
+    String xVal = exctractCoordFromString(cmdBuffer, 'X');
+    String yVal = exctractCoordFromString(cmdBuffer, 'Y');
+    if(xVal.toFloat() != -1)    //if proper values were sent
+      currentX = xVal.toFloat();  //set current coordinates to sent coordinates
+    if(yVal.toFloat() != -1)
+      currentY = yVal.toFloat();
+  }
+
 
   cmdBuffer = "";   //readies the buffer to receive a new command
 }
@@ -242,7 +257,7 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
 {
   if(x1 <= canvasWidth || y1 <= canvasHeight)   //if the new position is withing the robot bounds
   {
-
+    digitalWrite(enablePinLR, LOW);      //enables power to stepper motors
     currentX = x1;    //saves the new position. needs to happen before scaling
     currentY = y1;    //saves the new position. needs to happen before scaling
 
@@ -398,16 +413,16 @@ void moveToPosition(float x0, float y0, float x1, float y1)
 void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fashion to avoid overshoots
 {
   int servoNewPos;    //the position the servo should move to
-  int delayMS = 12;
+  int delayMS = 16;
   if(draw)
   {
     servoNewPos = servoPosDraw;
-    // delayMS = 10;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
+    // delayMS = 12;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
   }
   else
   {
     servoNewPos = servoPosNoDraw;
-    // delayMS = 7;
+    // delayMS = 8;
   }
 
   //increments or decrements the servo position until it's at the target position
@@ -421,6 +436,7 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
     penServo.write(servoPosCurrent);
     delay(delayMS);
   }
+  // delay(4*delayMS);
   delay(100);
 
 }
@@ -483,33 +499,51 @@ void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step
   
 }
 
-void commandG1()
+String exctractCoordFromString(String coordinateString, char coordinateAxis)
 {
-  String xVal = "-1";
-  String yVal = "-1";
-  String zVal = "-1";
-
-  char findChar = 'X';
-  if(cmdBuffer.indexOf(findChar) != -1)   //extracts the X value from the incomming command
+  String foundCoord = "-1";
+  char findChar = coordinateAxis;
+  if(coordinateString.indexOf(findChar) != -1)   //extracts the X value from the incomming command
   {
     //substring(from, to)
-    xVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' ') - cmdBuffer.indexOf(findChar)+1);
-    xVal = xVal.substring(0, xVal.indexOf(' '));
+    foundCoord = coordinateString.substring(coordinateString.indexOf(findChar)+1, (coordinateString.substring(coordinateString.indexOf(findChar)+1, coordinateString.indexOf(findChar)+2)).indexOf(' ') - coordinateString.indexOf(findChar)+1);
+    foundCoord = foundCoord.substring(0, foundCoord.indexOf(' '));
   }
+  return foundCoord;
+}
+
+
+void commandG1()
+{
+  // String xVal = "-1";
+  // String yVal = "-1";
+  // String zVal = "-1";
+
+  String xVal = exctractCoordFromString(cmdBuffer, 'X');
+  String yVal = exctractCoordFromString(cmdBuffer, 'Y');
+  String zVal = exctractCoordFromString(cmdBuffer, 'Z');
+
+  // char findChar = 'X';
+  // if(cmdBuffer.indexOf(findChar) != -1)   //extracts the X value from the incomming command
+  // {
+  //   //substring(from, to)
+  //   xVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' ') - cmdBuffer.indexOf(findChar)+1);
+  //   xVal = xVal.substring(0, xVal.indexOf(' '));
+  // }
   
-  findChar = 'Y';
-  if(cmdBuffer.indexOf(findChar) != -1)   //extracts the Y value from the incomming command
-  {
-    yVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' '));
-    yVal = yVal.substring(0, yVal.indexOf(' '));
-  }
+  // findChar = 'Y';
+  // if(cmdBuffer.indexOf(findChar) != -1)   //extracts the Y value from the incomming command
+  // {
+  //   yVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' '));
+  //   yVal = yVal.substring(0, yVal.indexOf(' '));
+  // }
   
-  findChar = 'Z';
-  if(cmdBuffer.indexOf(findChar) != -1)   //extracts the Z value from the incomming command
-  {
-    zVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' '));
-    zVal = zVal.substring(0, zVal.indexOf(' '));
-  }
+  // findChar = 'Z';
+  // if(cmdBuffer.indexOf(findChar) != -1)   //extracts the Z value from the incomming command
+  // {
+  //   zVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' '));
+  //   zVal = zVal.substring(0, zVal.indexOf(' '));
+  // }
 
 
   if(zVal.toInt() == 1 || zVal.toInt() == 0)    //if a z value was sent
