@@ -50,12 +50,12 @@ float currentY = homeY;
 
 
 //-------SPEED SETTINGS-------
-const int DEFAULT_SPEED_DELAY = 100;    //110;    //100;
-const int SLOWEST_SPEED_DELAY = 280;    //300;    //750;
+const int DEFAULT_SPEED_DELAY = 90;   //100;    
+const int SLOWEST_SPEED_DELAY = 240;  //280;    
 float currentSpeedDelay = DEFAULT_SPEED_DELAY;
 float totalLineSteps = 0;      //used to store the toal motor pulses to move a line. necessary for accel and deccel
 float traveledSteps = 0.0;
-const int STEPS_TO_ACCEL_DECCEL = 160;   //180   //300;
+const int STEPS_TO_ACCEL_DECCEL = 140;  //160;   
 // const int MM_TO_ACCEL_DECCEL = 20;
 // float totalMMtoTravel = 0.0;
 int accelMode = 0;      //0 = plain. 1 = accelerate. -1 = deccelerate
@@ -78,7 +78,8 @@ void interpolateToPosition(float, float, float, float, bool);
 void servoPenDraw(bool);
 void readSerial();
 void handleGCODE();
-void commandG1();
+void G1xyz();
+void G1lr();
 void handleAccel();
 String exctractCoordFromString(String, char);
 
@@ -209,7 +210,10 @@ void handleGCODE()
 
   if(cmdBuffer.indexOf("G1") != -1 || cmdBuffer.indexOf("G01") != -1)
   {
-    commandG1();   //moves the robot to the given coordinates
+    if(cmdBuffer.indexOf("X") != -1 || cmdBuffer.indexOf("Y") != -1 || cmdBuffer.indexOf("Z") != -1)
+      G1xyz();   //moves the robot to the given coordinates
+    else if(cmdBuffer.indexOf("L") != -1 || cmdBuffer.indexOf("R") != -1)
+      G1lr();
   }
   else if(cmdBuffer.indexOf("G28") != -1)    
   {
@@ -221,14 +225,22 @@ void handleGCODE()
   digitalWrite(enablePinLR, LOW);       //enables power to stepper motors
   else if(cmdBuffer.indexOf("M18") != -1)   
     digitalWrite(enablePinLR, HIGH);    //disable power to stepper motors
-  else if(cmdBuffer.indexOf("G92") != -1)  
+  else if(cmdBuffer.indexOf("G92") != -1)   //sets the current coordinates without moving motors
   {
-    String xVal = exctractCoordFromString(cmdBuffer, 'X');
-    String yVal = exctractCoordFromString(cmdBuffer, 'Y');
-    if(xVal.toFloat() != -1)    //if proper values were sent
-      currentX = xVal.toFloat();  //set current coordinates to sent coordinates
-    if(yVal.toFloat() != -1)
-      currentY = yVal.toFloat();
+    if(cmdBuffer.indexOf("G92 H") != -1)
+    {
+      currentX = homeX;
+      currentY = homeY;
+    }
+    else
+    {
+      String xVal = exctractCoordFromString(cmdBuffer, 'X');
+      String yVal = exctractCoordFromString(cmdBuffer, 'Y');
+      if(xVal.toFloat() != -1)    //if proper values were sent
+        currentX = xVal.toFloat();  //set current coordinates to sent coordinates
+      if(yVal.toFloat() != -1)
+        currentY = yVal.toFloat();
+    }
   }
 
 
@@ -413,16 +425,16 @@ void moveToPosition(float x0, float y0, float x1, float y1)
 void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fashion to avoid overshoots
 {
   int servoNewPos;    //the position the servo should move to
-  int delayMS = 16;
+  int delayMS;  // = 12;   //16
   if(draw)
   {
     servoNewPos = servoPosDraw;
-    // delayMS = 12;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
+    delayMS = 18;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
   }
   else
   {
     servoNewPos = servoPosNoDraw;
-    // delayMS = 8;
+    delayMS = 10;
   }
 
   //increments or decrements the servo position until it's at the target position
@@ -437,7 +449,7 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
     delay(delayMS);
   }
   // delay(4*delayMS);
-  delay(100);
+  delay(50);
 
 }
 
@@ -513,7 +525,7 @@ String exctractCoordFromString(String coordinateString, char coordinateAxis)
 }
 
 
-void commandG1()
+void G1xyz()
 {
   // String xVal = "-1";
   // String yVal = "-1";
@@ -570,6 +582,40 @@ void commandG1()
   // Serial.print("Z value = ");
   // Serial.println(zVal.toFloat());
   // delay(1000);
+}
+
+void G1lr()
+{
+  String lVal = exctractCoordFromString(cmdBuffer, 'L');
+  String rVal = exctractCoordFromString(cmdBuffer, 'R');
+
+  float travelDistance = 0;
+  bool leftMotor;
+  if(lVal.toFloat() != -1)
+  {
+    travelDistance = abs(lVal.toFloat());
+    leftMotor = true;
+  }
+  else if(rVal.toFloat() != -1)
+  {
+    travelDistance = abs(rVal.toFloat());
+    leftMotor = false;
+  }
+
+  bool moveDown = true;
+  if(cmdBuffer.indexOf("L-") != -1 || cmdBuffer.indexOf("R-") != -1)
+      moveDown = false;
+
+
+  
+  float nSteps = travelDistance / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
+  for (int i = 0; i < nSteps; i++)          //disse to måtene å kjøre for-løkke på gir nøyaktig samme resultat
+  {
+    handleAccel();
+    pulseMotor(leftMotor, moveDown);    //moves the motor with the longest distance one step
+  }
+    
+
 }
 
 void printXYfromHypo(float hL, float hR)    //used for debugging
