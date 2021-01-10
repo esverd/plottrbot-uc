@@ -12,7 +12,8 @@
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug",
-            "executable": "e:/CREATIVE PROJECTS/Video, PlottrBot/Kode/plottrbot-uc/.pio/build/uno/firmware.elf",
+            "executable": "e:/CREATIVE WIP/Video, PlottrBot/Kode/plottrbot-uc/.pio/build/uno/firmware.elf",
+            "projectEnvName": "uno",
             "toolchainBinDir": "C:/Users/eirik/.platformio/packages/toolchain-atmelavr/bin",
             "preLaunchTask": {
                 "type": "PlatformIO",
@@ -24,7 +25,8 @@
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug (skip Pre-Debug)",
-            "executable": "e:/CREATIVE PROJECTS/Video, PlottrBot/Kode/plottrbot-uc/.pio/build/uno/firmware.elf",
+            "executable": "e:/CREATIVE WIP/Video, PlottrBot/Kode/plottrbot-uc/.pio/build/uno/firmware.elf",
+            "projectEnvName": "uno",
             "toolchainBinDir": "C:/Users/eirik/.platformio/packages/toolchain-atmelavr/bin",
             "internalConsoleOptions": "openOnSessionStart"
         }
