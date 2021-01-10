@@ -83,6 +83,7 @@ void G1lr();
 void handleAccel();
 String exctractCoordFromString(String, char);
 void interpolateBezierQuad(float, float, float, float);
+void interpolateBezierCubic(float, float, float, float, float, float);
 
 
 void setup() 
@@ -223,7 +224,7 @@ void handleGCODE()
     interpolateLine(currentX, currentY, homeX, homeY);    //moves to home position
   }
   else if(cmdBuffer.indexOf("M17") != -1)   
-  digitalWrite(enablePinLR, LOW);       //enables power to stepper motors
+    digitalWrite(enablePinLR, LOW);       //enables power to stepper motors
   else if(cmdBuffer.indexOf("M18") != -1)   
     digitalWrite(enablePinLR, HIGH);    //disable power to stepper motors
   else if(cmdBuffer.indexOf("G92") != -1)   //sets the current coordinates without moving motors
@@ -242,6 +243,20 @@ void handleGCODE()
       if(yVal.toFloat() != -1)
         currentY = yVal.toFloat();
     }
+  }
+  else if(cmdBuffer.indexOf("G5") != -1)    
+  {
+    
+    if(cmdBuffer.indexOf("G5 Q") != -1)   //quadratic ^2
+    {
+      
+    }
+    else if(cmdBuffer.indexOf("G5 C") != -1)    //cubic ^3
+    {
+
+    }
+
+
   }
 
 
@@ -367,10 +382,26 @@ void interpolateBezierQuad(float x1, float y1, float x, float y)
   {
     float nextX =  currentX*pow((1-t), 2) + 2*t*x1*(1-t) + x*pow(t, 2);
     float nextY =  currentY*pow((1-t), 2) + 2*t*y1*(1-t) + y*pow(t, 2);
-    interpolateLine(currentX, currentY, nextX, nextY);
+    // interpolateLine(currentX, currentY, nextX, nextY);
+    moveToPosition(currentX, currentY, nextX, nextY);
+    currentX = nextX;    //saves the new position
+    currentY = nextY;    //saves the new position
   }
-  
+}
 
+void interpolateBezierCubic(float x1, float y1, float x2, float y2, float x, float y)
+{
+  //C(t) = P0*(1 - t)^3 + 3*t*P1*(1 - t)^2 + 3*(t^2)*P2*(1 - t)^2 + P3*t^3     t=[0,1]
+
+  for (float t = 0.0; t <= 1.0; t += 0.01)
+  {
+    float nextX =  currentX*pow((1-t), 3) + 3*t*x1*pow((1-t), 2) + 3*pow(t, 2)*x2*pow(1-t, 2) + x*pow(t, 3);
+    float nextY =  currentY*pow((1-t), 3) + 3*t*y1*pow((1-t), 2) + 3*pow(t, 2)*y2*pow(1-t, 2) + y*pow(t, 3);
+    // interpolateLine(currentX, currentY, nextX, nextY);
+    moveToPosition(currentX, currentY, nextX, nextY);
+    currentX = nextX;    //saves the new position
+    currentY = nextY;    //saves the new position
+  }
 }
 
 
