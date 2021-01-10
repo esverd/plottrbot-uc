@@ -50,8 +50,8 @@ float currentY = homeY;
 
 
 //-------SPEED SETTINGS-------
-const int DEFAULT_SPEED_DELAY = 90;   //100;    
-const int SLOWEST_SPEED_DELAY = 240;  //280;    
+const int DEFAULT_SPEED_DELAY = 200;//90;   //100;    
+const int SLOWEST_SPEED_DELAY = 500;//240;  //280;    
 float currentSpeedDelay = DEFAULT_SPEED_DELAY;
 float totalLineSteps = 0;      //used to store the toal motor pulses to move a line. necessary for accel and deccel
 float traveledSteps = 0.0;
@@ -73,8 +73,8 @@ void moveToPosition(float, float, float, float);
 void printXYfromHypo(float, float);
 float getXfromHypo(float, float);
 float getYfromHypo(float, float);
-void interpolateToPosition(float, float, float, float);
-void interpolateToPosition(float, float, float, float, bool);
+void interpolateLine(float, float, float, float);
+void interpolateLine(float, float, float, float, bool);
 void servoPenDraw(bool);
 void readSerial();
 void handleGCODE();
@@ -82,6 +82,7 @@ void G1xyz();
 void G1lr();
 void handleAccel();
 String exctractCoordFromString(String, char);
+void interpolateBezierQuad(float, float, float, float);
 
 
 void setup() 
@@ -219,7 +220,7 @@ void handleGCODE()
   {
     // currentX = homeX;  //sets the current position to the home position
     // currentY = homeY;
-    interpolateToPosition(currentX, currentY, homeX, homeY);    //moves to home position
+    interpolateLine(currentX, currentY, homeX, homeY);    //moves to home position
   }
   else if(cmdBuffer.indexOf("M17") != -1)   
   digitalWrite(enablePinLR, LOW);       //enables power to stepper motors
@@ -247,11 +248,20 @@ void handleGCODE()
   cmdBuffer = "";   //readies the buffer to receive a new command
 }
 
-
+bool runOnce = true;
 
 void loop() 
 {
   readSerial();
+  if(runOnce)
+  {
+    delay(5000);
+    interpolateLine(currentX, currentY, 580, 300);
+    interpolateBezierQuad(730, 350, 880, 300);
+    interpolateLine(currentX, currentY, homeX, homeY);
+    runOnce = false;
+  }
+
 }
 
 //move to coordinates in a straight line
@@ -259,13 +269,13 @@ void loop()
 //calculate how much to move each motor, and slope of straight curve
 //move motors in correct relationship
 
-void interpolateToPosition(float x0, float y0, float x1, float y1, bool draw)   //overloaded draw function which also sets the pen position
+void interpolateLine(float x0, float y0, float x1, float y1, bool draw)   //overloaded draw function which also sets the pen position
 {
   servoPenDraw(draw);
-  interpolateToPosition(x0, y0, x1, y1);
+  interpolateLine(x0, y0, x1, y1);
 }
 
-void interpolateToPosition(float x0, float y0, float x1, float y1)
+void interpolateLine(float x0, float y0, float x1, float y1)
 {
   if(x1 <= canvasWidth || y1 <= canvasHeight)   //if the new position is withing the robot bounds
   {
@@ -334,6 +344,32 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
       // Serial.println(Tl);
     }
   }
+
+}
+
+void interpolateBezierQuad(float x1, float y1, float x, float y)
+{
+  //c# will split svg into following components: M, L, Z, C, Q
+  //c# will then send these components as gcode to the robot
+  //the robot will then read and handle the gcode calling on the necessary type ov movement function
+
+
+  //arguments: xy values for all control points on curve
+  //calculate bezier path
+  //break path into smaller segments based on t
+  //iterate through changing values off t to find the next point to move to
+  //for loop
+  //moveToPosition(x0, y0, x1, y1)
+
+  //C(t) = P0*(1 - t)^2 + 2*t*P1*(1 - t) + P2*t^2     t=[0,1]
+
+  for (float t = 0.0; t <= 1.0; t += 0.01)
+  {
+    float nextX =  currentX*pow((1-t), 2) + 2*t*x1*(1-t) + x*pow(t, 2);
+    float nextY =  currentY*pow((1-t), 2) + 2*t*y1*(1-t) + y*pow(t, 2);
+    interpolateLine(currentX, currentY, nextX, nextY);
+  }
+  
 
 }
 
@@ -561,18 +597,18 @@ void G1xyz()
   if(zVal.toInt() == 1 || zVal.toInt() == 0)    //if a z value was sent
   {
     if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if xy values also were sent
-      interpolateToPosition(currentX, currentY, xVal.toFloat(), yVal.toFloat(), !zVal.toInt());    //act on xy coordinates and z value
+      interpolateLine(currentX, currentY, xVal.toFloat(), yVal.toFloat(), !zVal.toInt());    //act on xy coordinates and z value
     else
       servoPenDraw(!zVal.toInt());           //act on z value alone
   }
   else    //if no z value was sent
   {
     if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //and proper xy values were sent
-      interpolateToPosition(currentX, currentY, xVal.toFloat(), yVal.toFloat());    //act on xy coordinates
+      interpolateLine(currentX, currentY, xVal.toFloat(), yVal.toFloat());    //act on xy coordinates
     else if(xVal.toFloat() != -1)
-      interpolateToPosition(currentX, currentY, xVal.toFloat(), currentY);    //act on only x coordinate
+      interpolateLine(currentX, currentY, xVal.toFloat(), currentY);    //act on only x coordinate
     else if(yVal.toFloat() != -1)
-      interpolateToPosition(currentX, currentY, currentX, yVal.toFloat());    //act on only y coordinate
+      interpolateLine(currentX, currentY, currentX, yVal.toFloat());    //act on only y coordinate
   }
 
   // Serial.print("X value = ");
