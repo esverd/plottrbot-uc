@@ -247,15 +247,14 @@ void handleGCODE()
   else if(cmdBuffer.indexOf("G5") != -1)    
   {
     
-    if(cmdBuffer.indexOf("G5 Q") != -1)   //quadratic ^2
-    {
-      
-    }
-    else if(cmdBuffer.indexOf("G5 C") != -1)    //cubic ^3
+    if(cmdBuffer.indexOf("G5 q") != -1)   //quadratic ^2
     {
 
     }
+    else if(cmdBuffer.indexOf("G5 c") != -1)    //cubic ^3
+    {
 
+    }
 
   }
 
@@ -268,14 +267,14 @@ bool runOnce = true;
 void loop() 
 {
   readSerial();
-  if(runOnce)
-  {
-    delay(5000);
-    interpolateLine(currentX, currentY, 580, 300);
-    interpolateBezierQuad(730, 350, 880, 300);
-    interpolateLine(currentX, currentY, homeX, homeY);
-    runOnce = false;
-  }
+  // if(runOnce)
+  // {
+  //   delay(5000);
+  //   interpolateLine(currentX, currentY, 580, 300);
+  //   interpolateBezierQuad(730, 350, 880, 300);
+  //   interpolateLine(currentX, currentY, homeX, homeY);
+  //   runOnce = false;
+  // }
 
 }
 
