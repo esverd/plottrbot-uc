@@ -244,20 +244,30 @@ void handleGCODE()
         currentY = yVal.toFloat();
     }
   }
-  else if(cmdBuffer.indexOf("G5") != -1)    
+  else if(cmdBuffer.indexOf("G5 Q") != -1)   //quadratic ^2 
   {
-    
-    if(cmdBuffer.indexOf("G5 q") != -1)   //quadratic ^2
-    {
+      //void interpolateBezierQuad(float x1, float y1, float x, float y)
+      String iVal = exctractCoordFromString(cmdBuffer, 'I');
+      String jVal = exctractCoordFromString(cmdBuffer, 'J');
+      String xVal = exctractCoordFromString(cmdBuffer, 'X');
+      String yVal = exctractCoordFromString(cmdBuffer, 'Y');
 
-    }
-    else if(cmdBuffer.indexOf("G5 c") != -1)    //cubic ^3
-    {
-
-    }
-
+      if(iVal.toFloat() != -1 && jVal.toFloat() != -1 && xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if ijxy values were sent
+        interpolateBezierQuad(iVal.toFloat(), jVal.toFloat(), xVal.toFloat(), yVal.toFloat());    //act on ijxy coordinates
   }
+  else if(cmdBuffer.indexOf("G5 C") != -1)    //cubic ^3
+  {
+      //void interpolateBezierCubic(float x1, float y1, float x2, float y2, float x, float y)
+      String iVal = exctractCoordFromString(cmdBuffer, 'I');
+      String jVal = exctractCoordFromString(cmdBuffer, 'J');
+      String kVal = exctractCoordFromString(cmdBuffer, 'K');
+      String lVal = exctractCoordFromString(cmdBuffer, 'L');
+      String xVal = exctractCoordFromString(cmdBuffer, 'X');
+      String yVal = exctractCoordFromString(cmdBuffer, 'Y');
 
+      if(iVal.toFloat() != -1 && jVal.toFloat() != -1 && kVal.toFloat() != -1 && lVal.toFloat() != -1 && xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if ijklxy values were sent
+        interpolateBezierCubic(iVal.toFloat(), jVal.toFloat(), kVal.toFloat(), lVal.toFloat(), xVal.toFloat(), yVal.toFloat());    //act on ijklxy coordinates
+  }
 
   cmdBuffer = "";   //readies the buffer to receive a new command
 }
