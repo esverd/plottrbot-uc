@@ -3,7 +3,6 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <TMCStepper.h>   //needs to be my fork which has some important changes for stepper motor driving
-// #include <AccelStepper.h>
 
 
 //-------PIN I/O-------
@@ -14,7 +13,6 @@ const int csPinL = 7;
 const int stepPinR = 5; 
 const int dirPinR = 6; 
 const int csPinR = 8; 
-
 const int servoPin = 10;
 
 //-------MOTOR CONFIG-------
@@ -23,23 +21,15 @@ float r_sense = 0.11;
 TMC2130Stepper leftStepperDriver(csPinL, r_sense);                           // Hardware SPI
 TMC2130Stepper rightStepperDriver(csPinR, r_sense);                           // Hardware SPI  
 
-// AccelStepper leftStep = AccelStepper(leftStep.DRIVER, stepPinL, dirPinL);
-// AccelStepper rightStep = AccelStepper(rightStep.DRIVER, stepPinR, dirPinR);
-
-
 //-------CALIBRATION-------
 unsigned int canvasWidth = 1460;    //width between center of the two motor axis. unit is mm
 unsigned int canvasHeight = 1000;   //TODO bruke denne variabelen for å ikke gå utenfor maks høyde. brukes til å oppgi maks høyde med vekt på belte
 float homeX = (canvasWidth / 2.0);
 float homeY = 200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
-//speed or delay in microSeconds
 
 float scaleTotalDistance = (73.0/70)*(54.3/55)*(55.0/57)*(55/55.5);
 float diameterPulley = 12.2; //12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
 float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
-
-// float scaleX = 77.6/70;
-// float scaleY = 1.0;
 
 const int servoPosDraw = 100;     //servo position when the pen touches the canvas
 const int servoPosNoDraw = 150;   //servo position when the pen doesn't touch the canvas
@@ -47,7 +37,6 @@ int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to 
 
 float currentX = homeX;
 float currentY = homeY;
-
 
 //-------SPEED SETTINGS-------
 const int DEFAULT_SPEED_DELAY = 90;   //100;    
@@ -60,11 +49,9 @@ const int STEPS_TO_ACCEL_DECCEL = 140;  //160;
 // float totalMMtoTravel = 0.0;
 int accelMode = 0;      //0 = plain. 1 = accelerate. -1 = deccelerate
 
-
 //-------SERIAL COMMUNICATION-------
 int incomingByte = 0; // for incoming serial data
 String cmdBuffer = ""; 
-
 
 //-------FUNCTION PROTOTYPES-------
 void runMotor(bool, int, bool);
@@ -82,7 +69,6 @@ void G1xyz();
 void G1lr();
 void handleAccel();
 String exctractCoordFromString(String, char);
-
 
 void setup() 
 {
@@ -115,35 +101,17 @@ void setup()
   rightStepperDriver.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160   skal egentlig være true for stealthchop
   rightStepperDriver.pwm_autoscale(true);     // Needed for stealthChop
 
+}
 
-  // leftStepperDriver.blank_time(16);
-  // rightStepperDriver.blank_time(16);
-  // leftStepperDriver.ihold(0...31);    //konfigurere denne senere
-  // rightStepperDriver.ihold(0...31);    //konfigurere denne senere
-  // leftStep.setMaxSpeed(50*(1/Ts)); // 100mm/s @ 80 steps/mm
-  // leftStep.setAcceleration(1000*(1/Ts)); // 2000mm/s^2
-  // leftStep.setEnablePin(enablePinLR);
-  // leftStep.setPinsInverted(false, false, true);
-  // leftStep.enableOutputs();
-  // rightStep.setMaxSpeed(50*(1/Ts)); // 100mm/s @ 80 steps/mm
-  // rightStep.setAcceleration(1000*(1/Ts)); // 2000mm/s^2
-  // rightStep.setEnablePin(enablePinLR);
-  // rightStep.setPinsInverted(false, false, true);
-  // rightStep.enableOutputs();
-
-
+void loop() 
+{
+  readSerial();
 }
 
 
 void handleAccel()
 {
   float incDecToDelay = (SLOWEST_SPEED_DELAY - DEFAULT_SPEED_DELAY) / (float)STEPS_TO_ACCEL_DECCEL;   //the amount to decrease or increase step delay
-  // incDecToDelay = 1.8;
-
-  // Serial.print("totalLineSteps  =  ");
-  // Serial.print(totalLineSteps);
-  // Serial.print("    traveledSteps  =  ");
-  // Serial.println(traveledSteps);
 
   if(traveledSteps - STEPS_TO_ACCEL_DECCEL < 0)      //if its the first steps in a new line
   {
@@ -152,7 +120,6 @@ void handleAccel()
   }
   if(traveledSteps + STEPS_TO_ACCEL_DECCEL > totalLineSteps)    //if its the last steps in the current line line
     accelMode = -1;   //deccelerate the movement
-
 
   if(accelMode == 1)
   {
@@ -200,11 +167,8 @@ void readSerial()
 
 }
 
-
 void handleGCODE()
 {
-  //TODO change canvasSize. recalculate homeX. oppdatere størrelse i eeprom
-
   //eks: G1 X85.469 Y85.935
   //eks: G1 Z1
 
@@ -243,22 +207,14 @@ void handleGCODE()
     }
   }
 
-
   cmdBuffer = "";   //readies the buffer to receive a new command
 }
 
-
-
-void loop() 
-{
-  readSerial();
-}
 
 //move to coordinates in a straight line
 //void moveToPosition(int x0, int y0, int x1, int y1)
 //calculate how much to move each motor, and slope of straight curve
 //move motors in correct relationship
-
 void interpolateToPosition(float x0, float y0, float x1, float y1, bool draw)   //overloaded draw function which also sets the pen position
 {
   servoPenDraw(draw);
@@ -273,29 +229,11 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
     currentX = x1;    //saves the new position. needs to happen before scaling
     currentY = y1;    //saves the new position. needs to happen before scaling
 
-    // currentSpeedDelay = SLOWEST_SPEED_DELAY;
-
-// G1 X1100 Y200
-    // x0 *= sqrt(pow(x0 - homeX, 2))*scaleX;
-    // x1 *= sqrt(pow(x1 - homeX, 2))*scaleX;
-    // x0 *= scaleX;
-    // x1 *= scaleX;
-    // y0 *= scaleY;
-    // y1 *= scaleY;
-
     float deltaX = x1 - x0;
     float deltaY = y1 - y0;
-    // deltaX *= scaleX;
-    // deltaY *= scaleY;
-
     float Tl = sqrt( pow(deltaX, 2) + pow(deltaY, 2) );   //total length to move
-    // float theta = atan(deltaY / deltaX);    //angle between the two points
-
-    // totalMMtoTravel = Tl;
-    // totalMMtoTravel = (float)Tl * Ts;
 
     //this block is needed for calculating number of steps which is needed for accel/deccel
-    //TODO use mm as units instead of number of motor steps
     float hL0 = sqrt( pow(x0, 2) + pow(y0, 2) );    //calculate beginning left hypotenuse
     float hR0 = sqrt( pow(canvasWidth - x0, 2) + pow(y0, 2) );    //calculate beginning right hypotenuse
     float hL1 = sqrt( pow(x1, 2) + pow(y1, 2) );        //calculate end left hypotenuse
@@ -305,7 +243,6 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
     float deltaAbsMax = max(abs(deltahL), abs(deltahR));    //the longest distance one motor needs to move to reach the final point
     totalLineSteps = deltaAbsMax / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
     traveledSteps = 0;
-
       
     float distanceMoved = 0.0;
     float stepSize = 10.0;    //max distance in mm the robot sends to the function moveToPosition
@@ -316,9 +253,6 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
     {
       if(distanceMoved > Tl - stepSize)   //exit case: if less than 10mm is left to move
         stepSize = Tl - distanceMoved;    //set the stepSize equal to whatever length less than 10mm is left to move
-
-      // x1 = x0 + stepSize*cos(theta)*signX;
-      // y1 = y0 + stepSize*sin(theta);    //trenger ikke forttegn på y
       
       x1 = x0 + deltaX*(stepSize/Tl);     //sets a x1 and y1 point on the road to move to the total distance
       y1 = y0 + deltaY*(stepSize/Tl);     //sets a x1 and y1 point on the road to move to the total distance
@@ -326,12 +260,6 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
       x0 = x1;      //updates the start point for the next 10mm line
       y0 = y1;      //updates the start point for the next 10mm line
       distanceMoved += stepSize;      //updates the length moved so far
-
-      //distanceMoved = sqrt( pow(x1, 2) + pow(y1, 2) );
-      // Serial.print("distanceMoved = ");
-      // Serial.print(distanceMoved);
-      // Serial.print("    Tl = ");
-      // Serial.println(Tl);
     }
   }
 
@@ -339,12 +267,7 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
 
 
 void moveToPosition(float x0, float y0, float x1, float y1)
-{
-  //x0 *= scaleX;
-  //y0 *= scaleY;
-  //x1 *= scaleX;
-  //y1 *= scaleY;
-  
+{ 
   //h = hypotenuse
   float hL0 = sqrt( pow(x0, 2) + pow(y0, 2) );    //calculate beginning left hypotenuse
   float hR0 = sqrt( pow(canvasWidth - x0, 2) + pow(y0, 2) );    //calculate beginning right hypotenuse
@@ -352,9 +275,6 @@ void moveToPosition(float x0, float y0, float x1, float y1)
   float hR1 = sqrt( pow(canvasWidth - x1, 2) + pow(y1, 2) );      //calculate end right hypotenuse
   float deltahL = hL1 - hL0;    //calculate the total new distance for the left motor to move
   float deltahR = hR1 - hR0;    //calculate the total new distance for the right motor to move
-
-  // float Tl = sqrt( pow(x1 - x0, 2) + pow(y1 - y0, 2) );   //total length to move
-  // float nSteps = Tl / Ts;     //number of steps to pulse = total length to move / distance moved with one pulse
  
   //this block determines the direction for the motors to spin
   //depending on if the new hypotenuse is larger or smaller than the original
@@ -396,8 +316,6 @@ void moveToPosition(float x0, float y0, float x1, float y1)
 
   float deltaAbsMin = min(abs(deltahL), abs(deltahR));    //the shortes distance one motor needs to move to reach the final point
   float deltaAbsMax = max(abs(deltahL), abs(deltahR));    //the longest distance one motor needs to move to reach the final point
-  // float deltaMin = min(deltahL, deltahR);
-  // float deltaMax = max(deltahL, deltahR);
 
   float nSteps = deltaAbsMax / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
 
@@ -418,8 +336,6 @@ void moveToPosition(float x0, float y0, float x1, float y1)
     }
 
   }
-
-
 }
 
 void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fashion to avoid overshoots
@@ -450,43 +366,9 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
   }
   // delay(4*delayMS);
   delay(50);
-
 }
 
-
-// void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step    TMC2130
-// {
-//   int stepPin;
-//   //selects the proper motor pin and direction pin based on boolean input in function
-//   if(leftMotor)
-//   {
-//     stepPin = stepPinL;
-//     leftStepperDriver.shaft(!moveDown);
-//   }
-//   else
-//   {
-//     stepPin = stepPinR;
-//     rightStepperDriver.shaft(moveDown);
-//   }
-//   //sends pulse to selected motor
-//   digitalWrite(stepPin, HIGH);
-//   delayMicroseconds(currentSpeedDelay);            
-//   digitalWrite(stepPin, LOW);
-//   delayMicroseconds(currentSpeedDelay);
-
-//   // Run 5000 steps and switch direction in software
-//   // for (uint16_t i = 5000; i>0; i--) {
-//   //   digitalWrite(STEP_PIN, HIGH);
-//   //   delayMicroseconds(160);
-//   //   digitalWrite(STEP_PIN, LOW);
-//   //   delayMicroseconds(160);
-//   // }
-//   // shaft = !shaft;
-//   // driver.shaft(shaft);
-// }
-
-//lage pulseMotor som kun pulser ett steg
-void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step    //A4988
+void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step 
 {
   int stepPin, dirPin;
   //selects the proper motor pin and direction pin based on boolean input in function
@@ -524,39 +406,11 @@ String exctractCoordFromString(String coordinateString, char coordinateAxis)
   return foundCoord;
 }
 
-
 void G1xyz()
 {
-  // String xVal = "-1";
-  // String yVal = "-1";
-  // String zVal = "-1";
-
   String xVal = exctractCoordFromString(cmdBuffer, 'X');
   String yVal = exctractCoordFromString(cmdBuffer, 'Y');
   String zVal = exctractCoordFromString(cmdBuffer, 'Z');
-
-  // char findChar = 'X';
-  // if(cmdBuffer.indexOf(findChar) != -1)   //extracts the X value from the incomming command
-  // {
-  //   //substring(from, to)
-  //   xVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' ') - cmdBuffer.indexOf(findChar)+1);
-  //   xVal = xVal.substring(0, xVal.indexOf(' '));
-  // }
-  
-  // findChar = 'Y';
-  // if(cmdBuffer.indexOf(findChar) != -1)   //extracts the Y value from the incomming command
-  // {
-  //   yVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' '));
-  //   yVal = yVal.substring(0, yVal.indexOf(' '));
-  // }
-  
-  // findChar = 'Z';
-  // if(cmdBuffer.indexOf(findChar) != -1)   //extracts the Z value from the incomming command
-  // {
-  //   zVal = cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, (cmdBuffer.substring(cmdBuffer.indexOf(findChar)+1, cmdBuffer.indexOf(findChar)+2)).indexOf(' '));
-  //   zVal = zVal.substring(0, zVal.indexOf(' '));
-  // }
-
 
   if(zVal.toInt() == 1 || zVal.toInt() == 0)    //if a z value was sent
   {
@@ -575,13 +429,6 @@ void G1xyz()
       interpolateToPosition(currentX, currentY, currentX, yVal.toFloat());    //act on only y coordinate
   }
 
-  // Serial.print("X value = ");
-  // Serial.println(xVal.toFloat());
-  // Serial.print("Y value = ");
-  // Serial.println(yVal.toFloat());
-  // Serial.print("Z value = ");
-  // Serial.println(zVal.toFloat());
-  // delay(1000);
 }
 
 void G1lr()
@@ -605,11 +452,9 @@ void G1lr()
   bool moveDown = true;
   if(cmdBuffer.indexOf("L-") != -1 || cmdBuffer.indexOf("R-") != -1)
       moveDown = false;
-
-
   
   float nSteps = travelDistance / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
-  for (int i = 0; i < nSteps; i++)          //disse to måtene å kjøre for-løkke på gir nøyaktig samme resultat
+  for (int i = 0; i < nSteps; i++)  
   {
     handleAccel();
     pulseMotor(leftMotor, moveDown);    //moves the motor with the longest distance one step

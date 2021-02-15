@@ -53,7 +53,7 @@
                 ]
             },
             "defines": [
-                "PLATFORMIO=50004",
+                "PLATFORMIO=50100",
                 "ARDUINO_AVR_NANO",
                 "F_CPU=16000000L",
                 "ARDUINO_ARCH_AVR",
