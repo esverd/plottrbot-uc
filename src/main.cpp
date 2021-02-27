@@ -29,7 +29,7 @@ TMC2130Stepper rightStepperDriver(csPinR, r_sense);                           //
 
 //-------CALIBRATION-------
 unsigned int canvasWidth = 1460;    //width between center of the two motor axis. unit is mm
-unsigned int canvasHeight = 1000;   //TODO bruke denne variabelen for å ikke gå utenfor maks høyde. brukes til å oppgi maks høyde med vekt på belte
+unsigned int canvasHeight = 1200;   //TODO bruke denne variabelen for å ikke gå utenfor maks høyde. brukes til å oppgi maks høyde med vekt på belte
 float homeX = (canvasWidth / 2.0);
 float homeY = 200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
 //speed or delay in microSeconds
@@ -272,7 +272,7 @@ void handleGCODE()
   cmdBuffer = "";   //readies the buffer to receive a new command
 }
 
-bool runOnce = true;
+bool runOnce = false;
 
 void loop() 
 {
@@ -285,6 +285,14 @@ void loop()
   //   interpolateLine(currentX, currentY, homeX, homeY);
   //   runOnce = false;
   // }
+  if(runOnce)
+  {
+    delay(5000);
+    interpolateLine(currentX, currentY, 774.09, 202.58);
+    interpolateBezierCubic(774.09, 202.58, 711.08, 217.44, 711.96, 255.09);
+    interpolateLine(currentX, currentY, homeX, homeY);
+    runOnce = false;
+  }
 
 }
 
@@ -404,12 +412,14 @@ void interpolateBezierCubic(float x1, float y1, float x2, float y2, float x, flo
 
   for (float t = 0.0; t <= 1.0; t += 0.01)
   {
-    float nextX =  currentX*pow((1-t), 3) + 3*t*x1*pow((1-t), 2) + 3*pow(t, 2)*x2*pow(1-t, 2) + x*pow(t, 3);
-    float nextY =  currentY*pow((1-t), 3) + 3*t*y1*pow((1-t), 2) + 3*pow(t, 2)*y2*pow(1-t, 2) + y*pow(t, 3);
-    // interpolateLine(currentX, currentY, nextX, nextY);
+    // float nextX = currentX*pow((1-t), 3) + 3*t*x1*pow((1-t), 2) + 3*pow(t, 2)*x2*pow(1-t, 2) + x*pow(t, 3);
+    // float nextY = currentY*pow((1-t), 3) + 3*t*y1*pow((1-t), 2) + 3*pow(t, 2)*y2*pow(1-t, 2) + y*pow(t, 3);
+    float nextX = pow((1 - t), 3) * currentX + 3 * pow((1 - t), 2) * t * x1 + 3 * (1 - t) * pow(t, 2) * x2 + pow(t, 3) * x;
+    float nextY = pow((1 - t), 3) * currentY + 3 * pow((1 - t), 2) * t * y1 + 3 * (1 - t) * pow(t, 2) * y2 + pow(t, 3) * y;
+    //interpolateLine(currentX, currentY, nextX, nextY);
     moveToPosition(currentX, currentY, nextX, nextY);
-    currentX = nextX;    //saves the new position
-    currentY = nextY;    //saves the new position
+    // currentX = nextX;    //saves the new position //skal vel ikke oppdateres underveis? endre currentX til startX 
+    // currentY = nextY;    //saves the new position
   }
 }
 
