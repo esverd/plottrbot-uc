@@ -290,6 +290,7 @@ void loop()
     delay(5000);
     interpolateLine(currentX, currentY, 774.09, 202.58);
     interpolateBezierCubic(774.09, 202.58, 711.08, 217.44, 711.96, 255.09);
+    delay(1000);
     interpolateLine(currentX, currentY, homeX, homeY);
     runOnce = false;
   }
@@ -394,11 +395,12 @@ void interpolateBezierQuad(float x1, float y1, float x, float y)
   //moveToPosition(x0, y0, x1, y1)
 
   //C(t) = P0*(1 - t)^2 + 2*t*P1*(1 - t) + P2*t^2     t=[0,1]
-
+  float startX = currentX;
+  float startY = currentY;
   for (float t = 0.0; t <= 1.0; t += 0.01)
   {
-    float nextX =  currentX*pow((1-t), 2) + 2*t*x1*(1-t) + x*pow(t, 2);
-    float nextY =  currentY*pow((1-t), 2) + 2*t*y1*(1-t) + y*pow(t, 2);
+    float nextX =  startX*pow((1-t), 2) + 2*t*x1*(1-t) + x*pow(t, 2);
+    float nextY =  startY*pow((1-t), 2) + 2*t*y1*(1-t) + y*pow(t, 2);
     // interpolateLine(currentX, currentY, nextX, nextY);
     moveToPosition(currentX, currentY, nextX, nextY);
     currentX = nextX;    //saves the new position
@@ -409,17 +411,18 @@ void interpolateBezierQuad(float x1, float y1, float x, float y)
 void interpolateBezierCubic(float x1, float y1, float x2, float y2, float x, float y)
 {
   //C(t) = P0*(1 - t)^3 + 3*t*P1*(1 - t)^2 + 3*(t^2)*P2*(1 - t)^2 + P3*t^3     t=[0,1]
-
+  float startX = currentX;
+  float startY = currentY;
   for (float t = 0.0; t <= 1.0; t += 0.01)
   {
     // float nextX = currentX*pow((1-t), 3) + 3*t*x1*pow((1-t), 2) + 3*pow(t, 2)*x2*pow(1-t, 2) + x*pow(t, 3);
     // float nextY = currentY*pow((1-t), 3) + 3*t*y1*pow((1-t), 2) + 3*pow(t, 2)*y2*pow(1-t, 2) + y*pow(t, 3);
-    float nextX = pow((1 - t), 3) * currentX + 3 * pow((1 - t), 2) * t * x1 + 3 * (1 - t) * pow(t, 2) * x2 + pow(t, 3) * x;
-    float nextY = pow((1 - t), 3) * currentY + 3 * pow((1 - t), 2) * t * y1 + 3 * (1 - t) * pow(t, 2) * y2 + pow(t, 3) * y;
+    float nextX = pow((1 - t), 3) * startX + 3 * pow((1 - t), 2) * t * x1 + 3 * (1 - t) * pow(t, 2) * x2 + pow(t, 3) * x;
+    float nextY = pow((1 - t), 3) * startY + 3 * pow((1 - t), 2) * t * y1 + 3 * (1 - t) * pow(t, 2) * y2 + pow(t, 3) * y;
     //interpolateLine(currentX, currentY, nextX, nextY);
     moveToPosition(currentX, currentY, nextX, nextY);
-    // currentX = nextX;    //saves the new position //skal vel ikke oppdateres underveis? endre currentX til startX 
-    // currentY = nextY;    //saves the new position
+    currentX = nextX;    //saves the new position //skal vel ikke oppdateres underveis? endre currentX til startX 
+    currentY = nextY;    //saves the new position
   }
 }
 
