@@ -50,8 +50,10 @@ float currentY = homeY;
 
 
 //-------SPEED SETTINGS-------
-const int DEFAULT_SPEED_DELAY = 200;//90;   //100;    
-const int SLOWEST_SPEED_DELAY = 500;//240;  //280;    
+const int REFERENCE_DEFAULT_SPEED = 90;
+const int REFERENCE_SLOWEST_SPEED = 240;
+int DEFAULT_SPEED_DELAY = 90;//200;//90;   //100;    
+int SLOWEST_SPEED_DELAY = 240;//500;//240;  //280;    
 float currentSpeedDelay = DEFAULT_SPEED_DELAY;
 float totalLineSteps = 0;      //used to store the toal motor pulses to move a line. necessary for accel and deccel
 float traveledSteps = 0.0;
@@ -244,6 +246,20 @@ void handleGCODE()
         currentY = yVal.toFloat();
     }
   }
+  else if(cmdBuffer.indexOf("M220 S") != -1)   //adjusts the speed by percentage
+  {
+    String sVal = exctractCoordFromString(cmdBuffer, 'S');
+    float speedAdjust = (sVal.toFloat() / 100.0);
+    // if(speedAdjust < 1.0)         //if eg speed factor is 30% increase speed delay by 30%, multiply by 1.70
+    //   speedAdjust += 1;           //increase speed delay by 30%, multiply by 1.70
+    // else if(speedAdjust > 1.0)    //if eg speed factor is 140% decrease speed delay by 40%, multiply by 0.60
+    //   speedAdjust = 2 - speedAdjust;  //decrease speed delay by 40%, multiply by 0.60
+    //if eg speed factor is 30% increase speed delay by 30%, multiply by 1.70
+    //if eg speed factor is 140% decrease speed delay by 40%, multiply by 0.60
+    speedAdjust = 2 - speedAdjust;
+    DEFAULT_SPEED_DELAY = REFERENCE_DEFAULT_SPEED * speedAdjust;
+    SLOWEST_SPEED_DELAY = REFERENCE_SLOWEST_SPEED * speedAdjust;    
+  }
   else if(cmdBuffer.indexOf("G5 Q") != -1)   //quadratic ^2 
   {
       //void interpolateBezierQuad(float x1, float y1, float x, float y)
@@ -251,6 +267,10 @@ void handleGCODE()
       String jVal = exctractCoordFromString(cmdBuffer, 'J');
       String xVal = exctractCoordFromString(cmdBuffer, 'X');
       String yVal = exctractCoordFromString(cmdBuffer, 'Y');
+      String zVal = exctractCoordFromString(cmdBuffer, 'Z');
+
+      if(zVal.toInt() == 1 || zVal.toInt() == 0)    //if a z value was sent
+          servoPenDraw(!zVal.toInt());           //act on z value alone
 
       if(iVal.toFloat() != -1 && jVal.toFloat() != -1 && xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if ijxy values were sent
         interpolateBezierQuad(iVal.toFloat(), jVal.toFloat(), xVal.toFloat(), yVal.toFloat());    //act on ijxy coordinates
@@ -264,10 +284,14 @@ void handleGCODE()
       String lVal = exctractCoordFromString(cmdBuffer, 'L');
       String xVal = exctractCoordFromString(cmdBuffer, 'X');
       String yVal = exctractCoordFromString(cmdBuffer, 'Y');
+      String zVal = exctractCoordFromString(cmdBuffer, 'Z');
+
+      if(zVal.toInt() == 1 || zVal.toInt() == 0)    //if a z value was sent
+          servoPenDraw(!zVal.toInt());           //act on z value alone
 
       if(iVal.toFloat() != -1 && jVal.toFloat() != -1 && kVal.toFloat() != -1 && lVal.toFloat() != -1 && xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if ijklxy values were sent
         interpolateBezierCubic(iVal.toFloat(), jVal.toFloat(), kVal.toFloat(), lVal.toFloat(), xVal.toFloat(), yVal.toFloat());    //act on ijklxy coordinates
-  }
+      }
 
   cmdBuffer = "";   //readies the buffer to receive a new command
 }
@@ -285,15 +309,15 @@ void loop()
   //   interpolateLine(currentX, currentY, homeX, homeY);
   //   runOnce = false;
   // }
-  if(runOnce)
-  {
-    delay(5000);
-    interpolateLine(currentX, currentY, 774.09, 202.58);
-    interpolateBezierCubic(774.09, 202.58, 711.08, 217.44, 711.96, 255.09);
-    delay(1000);
-    interpolateLine(currentX, currentY, homeX, homeY);
-    runOnce = false;
-  }
+  // if(runOnce)
+  // {
+  //   delay(5000);
+  //   interpolateLine(currentX, currentY, 774.09, 202.58);
+  //   interpolateBezierCubic(774.09, 202.58, 711.08, 217.44, 711.96, 255.09);
+  //   delay(1000);
+  //   interpolateLine(currentX, currentY, homeX, homeY);
+  //   runOnce = false;
+  // }
 
 }
 
