@@ -34,7 +34,7 @@ float homeX = (canvasWidth / 2.0);
 float homeY = 200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
 //speed or delay in microSeconds
 
-float scaleTotalDistance = (73.0/70)*(54.3/55)*(55.0/57)*(55/55.5);
+float scaleTotalDistance = (73.0/70)*(54.3/55)*(55.0/57)*(55/55.5)*(65.0/67);
 float diameterPulley = 12.2; //12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
 float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
 
@@ -670,23 +670,33 @@ void G1xyz()
   //   zVal = zVal.substring(0, zVal.indexOf(' '));
   // }
 
-
+  //28.02.21
+  // if(zVal.toInt() == 1 || zVal.toInt() == 0)    //if a z value was sent
+  // {
+  //   if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if xy values also were sent
+  //     interpolateLine(currentX, currentY, xVal.toFloat(), yVal.toFloat(), !zVal.toInt());    //act on xy coordinates and z value
+  //   else
+  //     servoPenDraw(!zVal.toInt());           //act on z value alone
+  // }
+  // else    //if no z value was sent
+  // {
+  //   if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //and proper xy values were sent
+  //     interpolateLine(currentX, currentY, xVal.toFloat(), yVal.toFloat());    //act on xy coordinates
+  //   else if(xVal.toFloat() != -1)
+  //     interpolateLine(currentX, currentY, xVal.toFloat(), currentY);    //act on only x coordinate
+  //   else if(yVal.toFloat() != -1)
+  //     interpolateLine(currentX, currentY, currentX, yVal.toFloat());    //act on only y coordinate
+  // }
+  //28.02.21
   if(zVal.toInt() == 1 || zVal.toInt() == 0)    //if a z value was sent
-  {
-    if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if xy values also were sent
-      interpolateLine(currentX, currentY, xVal.toFloat(), yVal.toFloat(), !zVal.toInt());    //act on xy coordinates and z value
-    else
       servoPenDraw(!zVal.toInt());           //act on z value alone
-  }
-  else    //if no z value was sent
-  {
-    if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //and proper xy values were sent
-      interpolateLine(currentX, currentY, xVal.toFloat(), yVal.toFloat());    //act on xy coordinates
-    else if(xVal.toFloat() != -1)
-      interpolateLine(currentX, currentY, xVal.toFloat(), currentY);    //act on only x coordinate
-    else if(yVal.toFloat() != -1)
-      interpolateLine(currentX, currentY, currentX, yVal.toFloat());    //act on only y coordinate
-  }
+
+  if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if both xy values were sent
+    interpolateLine(currentX, currentY, xVal.toFloat(), yVal.toFloat());    //act on xy coordinates
+  else if(xVal.toFloat() != -1)
+    interpolateLine(currentX, currentY, xVal.toFloat(), currentY);    //act on only x coordinate
+  else if(yVal.toFloat() != -1)
+    interpolateLine(currentX, currentY, currentX, yVal.toFloat());    //act on only y coordinate
 
   // Serial.print("X value = ");
   // Serial.println(xVal.toFloat());
