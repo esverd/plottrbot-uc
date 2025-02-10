@@ -32,7 +32,7 @@ float diameterPulley = 12.2; //12.723; //11.98;    //in mm  //var rundt 12.723 m
 float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
 
 const int servoPosDraw = 100;     //servo position when the pen touches the canvas
-const int servoPosNoDraw = 150;   //servo position when the pen doesn't touch the canvas
+const int servoPosNoDraw = 125;   //servo position when the pen doesn't touch the canvas
 int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to make sure the robot later boots by moving to noDrawPosition
 
 float currentX = homeX;
@@ -345,12 +345,13 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
   if(draw)
   {
     servoNewPos = servoPosDraw;
-    delayMS = 18;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
+    // delayMS = 18;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
+    delayMS = 5;
   }
   else
   {
     servoNewPos = servoPosNoDraw;
-    delayMS = 10;
+    delayMS = 5;
   }
 
   //increments or decrements the servo position until it's at the target position
