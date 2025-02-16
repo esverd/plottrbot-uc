@@ -25,14 +25,14 @@ TMC2130Stepper rightStepperDriver(csPinR, r_sense);                           //
 unsigned int canvasWidth = 1460;    //width between center of the two motor axis. unit is mm
 unsigned int canvasHeight = 1000;   //TODO bruke denne variabelen for å ikke gå utenfor maks høyde. brukes til å oppgi maks høyde med vekt på belte
 float homeX = (canvasWidth / 2.0);
-float homeY = 200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
+float homeY = (32 + 208); //200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
 
 float scaleTotalDistance = (73.0/70)*(54.3/55)*(55.0/57)*(55/55.5);
 float diameterPulley = 12.2; //12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
 float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
 
 const int servoPosDraw = 100;     //servo position when the pen touches the canvas
-const int servoPosNoDraw = 125;   //servo position when the pen doesn't touch the canvas
+const int servoPosNoDraw = 140;   //servo position when the pen doesn't touch the canvas
 int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to make sure the robot later boots by moving to noDrawPosition
 
 float currentX = homeX;
@@ -346,12 +346,12 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
   {
     servoNewPos = servoPosDraw;
     // delayMS = 18;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
-    delayMS = 5;
+    delayMS = 10;
   }
   else
   {
     servoNewPos = servoPosNoDraw;
-    delayMS = 5;
+    delayMS = 4;
   }
 
   //increments or decrements the servo position until it's at the target position
