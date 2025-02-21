@@ -34,6 +34,8 @@ float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number
 const int servoPosDraw = 100;     //servo position when the pen touches the canvas
 const int servoPosNoDraw = 140;   //servo position when the pen doesn't touch the canvas
 int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to make sure the robot later boots by moving to noDrawPosition
+int servoDrawDelay = 12;    //delay in ms for the servo to move to the drawing position
+int servoNoDrawDelay = 4;  //delay in ms for the servo to move to the no drawing position
 
 float currentX = homeX;
 float currentY = homeY;
@@ -44,7 +46,7 @@ const int SLOWEST_SPEED_DELAY = 240;  //280;
 float currentSpeedDelay = DEFAULT_SPEED_DELAY;
 float totalLineSteps = 0;      //used to store the toal motor pulses to move a line. necessary for accel and deccel
 float traveledSteps = 0.0;
-const int STEPS_TO_ACCEL_DECCEL = 140;  //160;   
+const int STEPS_TO_ACCEL_DECCEL = 180;  //160;   
 // const int MM_TO_ACCEL_DECCEL = 20;
 // float totalMMtoTravel = 0.0;
 int accelMode = 0;      //0 = plain. 1 = accelerate. -1 = deccelerate
@@ -346,12 +348,12 @@ void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fas
   {
     servoNewPos = servoPosDraw;
     // delayMS = 18;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
-    delayMS = 10;
+    delayMS = servoDrawDelay;
   }
   else
   {
     servoNewPos = servoPosNoDraw;
-    delayMS = 4;
+    delayMS = servoNoDrawDelay;
   }
 
   //increments or decrements the servo position until it's at the target position
