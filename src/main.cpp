@@ -27,9 +27,9 @@ unsigned int canvasHeight = 1000;   //TODO bruke denne variabelen for √• ikke g√
 float homeX = (canvasWidth / 2.0);
 float homeY = (32 + 208); //200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
 
-float scaleTotalDistance = (73.0/70)*(54.3/55)*(55.0/57)*(55/55.5);
-float diameterPulley = 12.2; //12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
-float Ts = (diameterPulley*PI)/(3200.0*scaleTotalDistance);    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
+float scaleTotalDistance = (17.9/18)*(19.1/18); //(73.0/70)*(54.3/55)*(55.0/57)*(55/55.5);
+float diameterPulley = 12.0; //12.2; //12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
+float Ts = (diameterPulley*scaleTotalDistance*PI)/(3200.0);    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
 
 const int servoPosDraw = 100;     //servo position when the pen touches the canvas
 const int servoPosNoDraw = 140;   //servo position when the pen doesn't touch the canvas
