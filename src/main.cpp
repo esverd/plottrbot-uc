@@ -225,7 +225,7 @@ void interpolateToPosition(float x0, float y0, float x1, float y1, bool draw)   
 
 void interpolateToPosition(float x0, float y0, float x1, float y1)
 {
-  if(x1 <= canvasWidth || y1 <= canvasHeight)   //if the new position is withing the robot bounds
+  if(x1 <= canvasWidth && y1 <= canvasHeight)   //if the new position is within the robot bounds
   {
     digitalWrite(enablePinLR, LOW);      //enables power to stepper motors
     currentX = x1;    //saves the new position. needs to happen before scaling
