@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <TMCStepper.h>   //needs to be my fork which has some important changes for stepper motor driving
+#include <stdlib.h>
+#include <string.h>
 
 
 //-------PIN I/O-------
@@ -53,7 +55,10 @@ int accelMode = 0;      //0 = plain. 1 = accelerate. -1 = deccelerate
 
 //-------SERIAL COMMUNICATION-------
 int incomingByte = 0; // for incoming serial data
-String cmdBuffer = ""; 
+// Use a fixed command buffer so long plots do not depend on AVR heap/String behavior.
+const size_t CMD_BUFFER_SIZE = 160;
+char cmdBuffer[CMD_BUFFER_SIZE] = {0};
+size_t cmdLength = 0;
 
 //-------FUNCTION PROTOTYPES-------
 void runMotor(bool, int, bool);
@@ -70,7 +75,8 @@ void handleGCODE();
 void G1xyz();
 void G1lr();
 void handleAccel();
-String exctractCoordFromString(String, char);
+bool tryExtractFloat(char, float *);
+void resetCommandBuffer();
 
 void setup() 
 {
@@ -154,17 +160,26 @@ void readSerial()
   //process buffer by handling GCODE
   //loop
 
-  if(Serial.available() > 0)    //if serial communication is avalable
+  while(Serial.available() > 0)    //if serial communication is avalable
   {
     char inChar = Serial.read();    //reads next character
 
+    if(inChar == '\r')
+      continue;
+
     if(inChar == '\n')    //if string ended with new line process command
     {
-      handleGCODE();    //processes the received commans
-      Serial.println("GO");   //prints GO to signal the arduino is ready for the next command
+      if(cmdLength > 0)
+      {
+        handleGCODE();    //processes the received commans
+        Serial.println("GO");   //prints GO to signal the arduino is ready for the next command
+      }
     }
-    else
-      cmdBuffer += inChar;    //stores the incomming character string
+    else if(cmdLength + 1 < CMD_BUFFER_SIZE)
+    {
+      cmdBuffer[cmdLength++] = inChar;    //stores the incoming character string
+      cmdBuffer[cmdLength] = '\0';
+    }
   }
 
 }
@@ -174,42 +189,42 @@ void handleGCODE()
   //eks: G1 X85.469 Y85.935
   //eks: G1 Z1
 
-  if(cmdBuffer.indexOf("G1") != -1 || cmdBuffer.indexOf("G01") != -1)
+  if(strncmp(cmdBuffer, "G01 ", 4) == 0 || strcmp(cmdBuffer, "G01") == 0 || strncmp(cmdBuffer, "G1 ", 3) == 0 || strcmp(cmdBuffer, "G1") == 0)
   {
-    if(cmdBuffer.indexOf("X") != -1 || cmdBuffer.indexOf("Y") != -1 || cmdBuffer.indexOf("Z") != -1)
+    if(strchr(cmdBuffer, 'X') != nullptr || strchr(cmdBuffer, 'Y') != nullptr || strchr(cmdBuffer, 'Z') != nullptr)
       G1xyz();   //moves the robot to the given coordinates
-    else if(cmdBuffer.indexOf("L") != -1 || cmdBuffer.indexOf("R") != -1)
+    else if(strchr(cmdBuffer, 'L') != nullptr || strchr(cmdBuffer, 'R') != nullptr)
       G1lr();
   }
-  else if(cmdBuffer.indexOf("G28") != -1)    
+  else if(strncmp(cmdBuffer, "G28", 3) == 0)    
   {
     // currentX = homeX;  //sets the current position to the home position
     // currentY = homeY;
     interpolateToPosition(currentX, currentY, homeX, homeY);    //moves to home position
   }
-  else if(cmdBuffer.indexOf("M17") != -1)   
-  digitalWrite(enablePinLR, LOW);       //enables power to stepper motors
-  else if(cmdBuffer.indexOf("M18") != -1)   
+  else if(strncmp(cmdBuffer, "M17", 3) == 0)   
+    digitalWrite(enablePinLR, LOW);       //enables power to stepper motors
+  else if(strncmp(cmdBuffer, "M18", 3) == 0)   
     digitalWrite(enablePinLR, HIGH);    //disable power to stepper motors
-  else if(cmdBuffer.indexOf("G92") != -1)   //sets the current coordinates without moving motors
+  else if(strncmp(cmdBuffer, "G92", 3) == 0)   //sets the current coordinates without moving motors
   {
-    if(cmdBuffer.indexOf("G92 H") != -1)
+    if(strstr(cmdBuffer, "G92 H") != nullptr)
     {
       currentX = homeX;
       currentY = homeY;
     }
     else
     {
-      String xVal = exctractCoordFromString(cmdBuffer, 'X');
-      String yVal = exctractCoordFromString(cmdBuffer, 'Y');
-      if(xVal.toFloat() != -1)    //if proper values were sent
-        currentX = xVal.toFloat();  //set current coordinates to sent coordinates
-      if(yVal.toFloat() != -1)
-        currentY = yVal.toFloat();
+      float xVal;
+      float yVal;
+      if(tryExtractFloat('X', &xVal))    //if proper values were sent
+        currentX = xVal;  //set current coordinates to sent coordinates
+      if(tryExtractFloat('Y', &yVal))
+        currentY = yVal;
     }
   }
 
-  cmdBuffer = "";   //readies the buffer to receive a new command
+  resetCommandBuffer();   //readies the buffer to receive a new command
 }
 
 
@@ -225,21 +240,21 @@ void interpolateToPosition(float x0, float y0, float x1, float y1, bool draw)   
 
 void interpolateToPosition(float x0, float y0, float x1, float y1)
 {
-  if(x1 <= canvasWidth && y1 <= canvasHeight)   //if the new position is within the robot bounds
+  if(x1 >= 0 && y1 >= 0 && x1 <= canvasWidth && y1 <= canvasHeight)   //if the new position is within the robot bounds
   {
     digitalWrite(enablePinLR, LOW);      //enables power to stepper motors
-    currentX = x1;    //saves the new position. needs to happen before scaling
-    currentY = y1;    //saves the new position. needs to happen before scaling
+    float targetX = x1;
+    float targetY = y1;
 
-    float deltaX = x1 - x0;
-    float deltaY = y1 - y0;
+    float deltaX = targetX - x0;
+    float deltaY = targetY - y0;
     float Tl = sqrt( pow(deltaX, 2) + pow(deltaY, 2) );   //total length to move
 
     //this block is needed for calculating number of steps which is needed for accel/deccel
     float hL0 = sqrt( pow(x0, 2) + pow(y0, 2) );    //calculate beginning left hypotenuse
     float hR0 = sqrt( pow(canvasWidth - x0, 2) + pow(y0, 2) );    //calculate beginning right hypotenuse
-    float hL1 = sqrt( pow(x1, 2) + pow(y1, 2) );        //calculate end left hypotenuse
-    float hR1 = sqrt( pow(canvasWidth - x1, 2) + pow(y1, 2) );      //calculate end right hypotenuse
+    float hL1 = sqrt( pow(targetX, 2) + pow(targetY, 2) );        //calculate end left hypotenuse
+    float hR1 = sqrt( pow(canvasWidth - targetX, 2) + pow(targetY, 2) );      //calculate end right hypotenuse
     float deltahL = hL1 - hL0;    //calculate the total new distance for the left motor to move
     float deltahR = hR1 - hR0;    //calculate the total new distance for the right motor to move
     float deltaAbsMax = max(abs(deltahL), abs(deltahR));    //the longest distance one motor needs to move to reach the final point
@@ -256,13 +271,16 @@ void interpolateToPosition(float x0, float y0, float x1, float y1)
       if(distanceMoved > Tl - stepSize)   //exit case: if less than 10mm is left to move
         stepSize = Tl - distanceMoved;    //set the stepSize equal to whatever length less than 10mm is left to move
       
-      x1 = x0 + deltaX*(stepSize/Tl);     //sets a x1 and y1 point on the road to move to the total distance
-      y1 = y0 + deltaY*(stepSize/Tl);     //sets a x1 and y1 point on the road to move to the total distance
-      moveToPosition(x0, y0, x1, y1);     //moves 10mm on the road to the total distance
-      x0 = x1;      //updates the start point for the next 10mm line
-      y0 = y1;      //updates the start point for the next 10mm line
+      float nextX = x0 + deltaX*(stepSize/Tl);     //sets an intermediate point on the road to move to the total distance
+      float nextY = y0 + deltaY*(stepSize/Tl);     //sets an intermediate point on the road to move to the total distance
+      moveToPosition(x0, y0, nextX, nextY);     //moves 10mm on the road to the total distance
+      x0 = nextX;      //updates the start point for the next 10mm line
+      y0 = nextY;      //updates the start point for the next 10mm line
       distanceMoved += stepSize;      //updates the length moved so far
     }
+
+    currentX = targetX;
+    currentY = targetY;
   }
 
 }
@@ -396,64 +414,83 @@ void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step
   
 }
 
-String exctractCoordFromString(String coordinateString, char coordinateAxis)
+bool tryExtractFloat(char coordinateAxis, float *valueOut)
 {
-  String foundCoord = "-1";
-  char findChar = coordinateAxis;
-  if(coordinateString.indexOf(findChar) != -1)   //extracts the X value from the incomming command
-  {
-    //substring(from, to)
-    foundCoord = coordinateString.substring(coordinateString.indexOf(findChar)+1, (coordinateString.substring(coordinateString.indexOf(findChar)+1, coordinateString.indexOf(findChar)+2)).indexOf(' ') - coordinateString.indexOf(findChar)+1);
-    foundCoord = foundCoord.substring(0, foundCoord.indexOf(' '));
-  }
-  return foundCoord;
+  char *axisPosition = strchr(cmdBuffer, coordinateAxis);
+  if(axisPosition == nullptr)
+    return false;
+
+  axisPosition++;
+  while(*axisPosition == ' ')
+    axisPosition++;
+
+  char firstChar = *axisPosition;
+  if(firstChar == '\0')
+    return false;
+  if((firstChar < '0' || firstChar > '9') && firstChar != '-' && firstChar != '+' && firstChar != '.')
+    return false;
+
+  *valueOut = atof(axisPosition);
+  return true;
+}
+
+void resetCommandBuffer()
+{
+  cmdLength = 0;
+  cmdBuffer[0] = '\0';
 }
 
 void G1xyz()
 {
-  String xVal = exctractCoordFromString(cmdBuffer, 'X');
-  String yVal = exctractCoordFromString(cmdBuffer, 'Y');
-  String zVal = exctractCoordFromString(cmdBuffer, 'Z');
+  float xVal = 0;
+  float yVal = 0;
+  float zVal = 0;
+  bool hasX = tryExtractFloat('X', &xVal);
+  bool hasY = tryExtractFloat('Y', &yVal);
+  bool hasZ = tryExtractFloat('Z', &zVal);
 
-  if(zVal.toInt() == 1 || zVal.toInt() == 0)    //if a z value was sent
+  if(hasZ && (zVal == 1 || zVal == 0))    //if a z value was sent
   {
-    if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //if xy values also were sent
-      interpolateToPosition(currentX, currentY, xVal.toFloat(), yVal.toFloat(), !zVal.toInt());    //act on xy coordinates and z value
+    if(hasX && hasY)    //if xy values also were sent
+      interpolateToPosition(currentX, currentY, xVal, yVal, zVal == 0);    //act on xy coordinates and z value
     else
-      servoPenDraw(!zVal.toInt());           //act on z value alone
+      servoPenDraw(zVal == 0);           //act on z value alone
   }
   else    //if no z value was sent
   {
-    if(xVal.toFloat() != -1 && yVal.toFloat() != -1)    //and proper xy values were sent
-      interpolateToPosition(currentX, currentY, xVal.toFloat(), yVal.toFloat());    //act on xy coordinates
-    else if(xVal.toFloat() != -1)
-      interpolateToPosition(currentX, currentY, xVal.toFloat(), currentY);    //act on only x coordinate
-    else if(yVal.toFloat() != -1)
-      interpolateToPosition(currentX, currentY, currentX, yVal.toFloat());    //act on only y coordinate
+    if(hasX && hasY)    //and proper xy values were sent
+      interpolateToPosition(currentX, currentY, xVal, yVal);    //act on xy coordinates
+    else if(hasX)
+      interpolateToPosition(currentX, currentY, xVal, currentY);    //act on only x coordinate
+    else if(hasY)
+      interpolateToPosition(currentX, currentY, currentX, yVal);    //act on only y coordinate
   }
 
 }
 
 void G1lr()
 {
-  String lVal = exctractCoordFromString(cmdBuffer, 'L');
-  String rVal = exctractCoordFromString(cmdBuffer, 'R');
-
+  float lVal = 0;
+  float rVal = 0;
+  bool hasL = tryExtractFloat('L', &lVal);
+  bool hasR = tryExtractFloat('R', &rVal);
   float travelDistance = 0;
   bool leftMotor;
-  if(lVal.toFloat() != -1)
+  if(hasL)
   {
-    travelDistance = abs(lVal.toFloat());
+    travelDistance = abs(lVal);
     leftMotor = true;
   }
-  else if(rVal.toFloat() != -1)
+  else if(hasR)
   {
-    travelDistance = abs(rVal.toFloat());
+    travelDistance = abs(rVal);
     leftMotor = false;
   }
+  else
+    return;
 
   bool moveDown = true;
-  if(cmdBuffer.indexOf("L-") != -1 || cmdBuffer.indexOf("R-") != -1)
+  if(strstr(cmdBuffer, "L-") != nullptr || strstr(cmdBuffer, "R-") != nullptr)
       moveDown = false;
   
   float nSteps = travelDistance / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
