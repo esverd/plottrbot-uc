@@ -22,7 +22,7 @@ TMC2130Stepper leftStepperDriver(csPinL, r_sense);                           // 
 TMC2130Stepper rightStepperDriver(csPinR, r_sense);                           // Hardware SPI  
 
 //-------CALIBRATION-------
-unsigned int canvasWidth = 1460;    //width between center of the two motor axis. unit is mm
+unsigned int canvasWidth = 1162;    //width between center of the two motor axis. unit is mm
 unsigned int canvasHeight = 1000;   //TODO bruke denne variabelen for å ikke gå utenfor maks høyde. brukes til å oppgi maks høyde med vekt på belte
 float homeX = (canvasWidth / 2.0);
 float homeY = (32 + 208); //200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
