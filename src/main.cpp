@@ -1,526 +1,380 @@
-
-
 #include <Arduino.h>
 #include <Servo.h>
-#include <TMCStepper.h>   //needs to be my fork which has some important changes for stepper motor driving
-#include <stdlib.h>
+#include <TMCStepper.h>
+#include <SPI.h>
+#include <math.h>
 #include <string.h>
+#include <plottrbot/kinematics.h>
+#include <plottrbot/protocol.h>
 
+using namespace plottrbot;
 
-//-------PIN I/O-------
 const int enablePinLR = 2;
-const int stepPinL = 3; 
-const int dirPinL = 4; 
-const int csPinL = 7; 
-const int stepPinR = 5; 
-const int dirPinR = 6; 
-const int csPinR = 8; 
+const int stepPinL = 3;
+const int dirPinL = 4;
+const int csPinL = 7;
+const int stepPinR = 5;
+const int dirPinR = 6;
+const int csPinR = 8;
 const int servoPin = 10;
 
-//-------MOTOR CONFIG-------
-Servo penServo;  // create servo object to control a servo
-float r_sense = 0.11;
-TMC2130Stepper leftStepperDriver(csPinL, r_sense);                           // Hardware SPI
-TMC2130Stepper rightStepperDriver(csPinR, r_sense);                           // Hardware SPI  
+Servo penServo;
+float r_sense = 0.11f;
+TMC2130Stepper leftStepperDriver(csPinL, r_sense);
+TMC2130Stepper rightStepperDriver(csPinR, r_sense);
 
-//-------CALIBRATION-------
-unsigned int canvasWidth = 1162;    //width between center of the two motor axis. unit is mm
-unsigned int canvasHeight = 1000;   //TODO bruke denne variabelen for å ikke gå utenfor maks høyde. brukes til å oppgi maks høyde med vekt på belte
-float homeX = (canvasWidth / 2.0);
-float homeY = (32 + 208); //200.0;            //homing key neck (168mm) + center motor axle to center rail (32mm) = 200mm
+const float CALIBRATED_PULLEY_DIAMETER_MM = 12.0f;
+const float CALIBRATED_BELT_SCALE = (17.9f / 18.0f) * (19.1f / 18.0f);
+const float DEFAULT_MM_PER_MICROSTEP = (CALIBRATED_PULLEY_DIAMETER_MM * CALIBRATED_BELT_SCALE * PI) / 3200.0f;
 
-float scaleTotalDistance = (17.9/18)*(19.1/18); //(73.0/70)*(54.3/55)*(55.0/57)*(55/55.5);
-float diameterPulley = 12.0; //12.2; //12.723; //11.98;    //in mm  //var rundt 12.723 med gamle stepper drivers.- 11.98 med tmc2130
-float Ts = (diameterPulley*scaleTotalDistance*PI)/(3200.0);    //3200 the number of steps to complete full rotation of motor. micro stepping = 16
+// Keep scales independent even while their compiled defaults match. Future
+// calibration must update one field, never collapse them into a shared scale.
+MachineConfig machineConfig = {
+  1162.0f, 581.0f, 240.0f, 1162.0f, 1000.0f,
+  DEFAULT_MM_PER_MICROSTEP, DEFAULT_MM_PER_MICROSTEP
+};
 
-const int servoPosDraw = 100;     //servo position when the pen touches the canvas
-const int servoPosNoDraw = 140;   //servo position when the pen doesn't touch the canvas
-int servoPosCurrent = servoPosDraw;   //sets the current position to drawing to make sure the robot later boots by moving to noDrawPosition
-int servoDrawDelay = 12;    //delay in ms for the servo to move to the drawing position
-int servoNoDrawDelay = 4;  //delay in ms for the servo to move to the no drawing position
+// This state is authoritative. It is updated only after a physical pulse.
+StepPosition currentSteps = {0, 0};
 
-float currentX = homeX;
-float currentY = homeY;
+const int servoPosDraw = 100;
+const int servoPosNoDraw = 140;
+int servoPosCurrent = servoPosNoDraw;
+const int servoDrawDelay = 12;
+const int servoNoDrawDelay = 4;
 
-//-------SPEED SETTINGS-------
-const int DEFAULT_SPEED_DELAY = 90;   //100;    
-const int SLOWEST_SPEED_DELAY = 240;  //280;    
+const int DEFAULT_SPEED_DELAY = 90;
+const int SLOWEST_SPEED_DELAY = 240;
+const int STEPS_TO_ACCEL_DECCEL = 180;
 float currentSpeedDelay = DEFAULT_SPEED_DELAY;
-float totalLineSteps = 0;      //used to store the toal motor pulses to move a line. necessary for accel and deccel
-float traveledSteps = 0.0;
-const int STEPS_TO_ACCEL_DECCEL = 180;  //160;   
-// const int MM_TO_ACCEL_DECCEL = 20;
-// float totalMMtoTravel = 0.0;
-int accelMode = 0;      //0 = plain. 1 = accelerate. -1 = deccelerate
+float totalLineSteps = 0.0f;
+float traveledSteps = 0.0f;
+int accelMode = 0;
+const float MAX_CARTESIAN_CHORD_MM = 2.0f;
 
-//-------SERIAL COMMUNICATION-------
-int incomingByte = 0; // for incoming serial data
-// Use a fixed command buffer so long plots do not depend on AVR heap/String behavior.
 const size_t CMD_BUFFER_SIZE = 160;
 char cmdBuffer[CMD_BUFFER_SIZE] = {0};
 size_t cmdLength = 0;
+bool commandOverflow = false;
 
-//-------FUNCTION PROTOTYPES-------
-void runMotor(bool, int, bool);
-void pulseMotor(bool, bool);
-void moveToPosition(float, float, float, float);
-void printXYfromHypo(float, float);
-float getXfromHypo(float, float);
-float getYfromHypo(float, float);
-void interpolateToPosition(float, float, float, float);
-void interpolateToPosition(float, float, float, float, bool);
-void servoPenDraw(bool);
-void readSerial();
-void handleGCODE();
-void G1xyz();
-void G1lr();
-void handleAccel();
-bool tryExtractFloat(char, float *);
 void resetCommandBuffer();
+void handleGCODE();
+void handleAccel();
+void pulseMotor(bool leftMotor, bool beltLengthening);
+void servoPenDraw(bool draw);
+void printError(const char *code);
+bool executeStepTarget(const StepPosition &target);
+bool executeCartesianLine(const CartesianPoint &target);
+bool getCurrentCartesian(CartesianPoint *point);
+bool setLogicalPosition(const CartesianPoint &point);
+bool hasCommand(const char *code);
+void reportM503();
 
-void setup() 
-{
+void setup() {
   Serial.begin(9600);
-  penServo.attach(servoPin);
-  Serial.println("Starting");
-  servoPenDraw(false);      //starts with the pen not touching the canvas
-
-  //-------stepper motor setup-------
   pinMode(stepPinL, OUTPUT);
   pinMode(dirPinL, OUTPUT);
   pinMode(stepPinR, OUTPUT);
   pinMode(dirPinR, OUTPUT);
   pinMode(enablePinLR, OUTPUT);
-  digitalWrite(enablePinLR, LOW);      // Enable driver in hardware
-  
-  SPI.begin();                    // SPI drivers
+  digitalWrite(enablePinLR, HIGH);  // Boot fail-safe: drivers are disabled.
+  penServo.attach(servoPin);        // Do not write at boot: do not move pen.
 
-  leftStepperDriver.begin();                 //  SPI: Init CS pins and possible SW SPI pins
-  // leftStepperDriver.toff(5);                 // Enables driver in software
-  leftStepperDriver.rms_current(700);        // Set motor RMS current
-  leftStepperDriver.microsteps(16);          // Set microsteps to 1/16th
-  leftStepperDriver.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160
-  leftStepperDriver.pwm_autoscale(true);     // Needed for stealthChop
+  SPI.begin();
+  leftStepperDriver.begin();
+  leftStepperDriver.rms_current(700);
+  leftStepperDriver.microsteps(16);
+  leftStepperDriver.en_pwm_mode(true);
+  leftStepperDriver.pwm_autoscale(true);
+  rightStepperDriver.begin();
+  rightStepperDriver.rms_current(700);
+  rightStepperDriver.microsteps(16);
+  rightStepperDriver.en_pwm_mode(true);
+  rightStepperDriver.pwm_autoscale(true);
 
-  rightStepperDriver.begin();                 //  SPI: Init CS pins and possible SW SPI pins
-  // rightStepperDriver.toff(5);                 // Enables driver in software
-  rightStepperDriver.rms_current(700);        // Set motor RMS current
-  rightStepperDriver.microsteps(16);          // Set microsteps to 1/16th
-  rightStepperDriver.en_pwm_mode(true);       // Toggle stealthChop on TMC2130/2160/5130/5160   skal egentlig være true for stealthchop
-  rightStepperDriver.pwm_autoscale(true);     // Needed for stealthChop
-
+  if(!setLogicalPosition(CartesianPoint{machineConfig.home_x_mm, machineConfig.home_y_mm}))
+    printError("config:invalid");
+  Serial.println("Starting");
 }
 
-void loop() 
-{
-  readSerial();
-}
-
-
-void handleAccel()
-{
-  float incDecToDelay = (SLOWEST_SPEED_DELAY - DEFAULT_SPEED_DELAY) / (float)STEPS_TO_ACCEL_DECCEL;   //the amount to decrease or increase step delay
-
-  if(traveledSteps - STEPS_TO_ACCEL_DECCEL < 0)      //if its the first steps in a new line
-  {
-    accelMode = 1;    //accelerate the movement
-    currentSpeedDelay = SLOWEST_SPEED_DELAY;
-  }
-  if(traveledSteps + STEPS_TO_ACCEL_DECCEL > totalLineSteps)    //if its the last steps in the current line line
-    accelMode = -1;   //deccelerate the movement
-
-  if(accelMode == 1)
-  {
-    currentSpeedDelay -= incDecToDelay;     //accelerates frequency of motor pulses
-    if(currentSpeedDelay < DEFAULT_SPEED_DELAY)   //if the speed delay gets set to outside limits
-    {
-      currentSpeedDelay = DEFAULT_SPEED_DELAY;
-      accelMode = 0;      //stop acceleration process
-    }
-  }
-  if(accelMode == -1)
-  {
-    currentSpeedDelay += incDecToDelay;   //if the speed delay gets set to outside limits
-    if(currentSpeedDelay > SLOWEST_SPEED_DELAY)
-    {
-      currentSpeedDelay = SLOWEST_SPEED_DELAY;
-      accelMode = 0;    //stop decceleration process
-    }
-  }
-
-  traveledSteps++;    //increment number of steps moved in the current line
-}
-
-void readSerial()
-{
-  //if serial available
-  //send start signal to receive new commands
-  //store commands in buffer
-  //\n is end of command
-  //process buffer by handling GCODE
-  //loop
-
-  while(Serial.available() > 0)    //if serial communication is avalable
-  {
-    char inChar = Serial.read();    //reads next character
-
+void loop() {
+  while(Serial.available() > 0) {
+    const char inChar = (char)Serial.read();
     if(inChar == '\r')
       continue;
-
-    if(inChar == '\n')    //if string ended with new line process command
-    {
-      if(cmdLength > 0)
-      {
-        handleGCODE();    //processes the received commans
-        Serial.println("GO");   //prints GO to signal the arduino is ready for the next command
-      }
-    }
-    else if(cmdLength + 1 < CMD_BUFFER_SIZE)
-    {
-      cmdBuffer[cmdLength++] = inChar;    //stores the incoming character string
+    if(inChar == '\n') {
+      if(commandOverflow)
+        printError("command:too_long");
+      else if(cmdLength > 0)
+        handleGCODE();
+      if(cmdLength > 0 || commandOverflow)
+        Serial.println("GO");
+      resetCommandBuffer();
+    } else if(cmdLength + 1 < CMD_BUFFER_SIZE) {
+      cmdBuffer[cmdLength++] = inChar;
       cmdBuffer[cmdLength] = '\0';
+    } else {
+      commandOverflow = true;
     }
   }
-
 }
 
-void handleGCODE()
-{
-  //eks: G1 X85.469 Y85.935
-  //eks: G1 Z1
-
-  if(strncmp(cmdBuffer, "G01 ", 4) == 0 || strcmp(cmdBuffer, "G01") == 0 || strncmp(cmdBuffer, "G1 ", 3) == 0 || strcmp(cmdBuffer, "G1") == 0)
-  {
-    if(strchr(cmdBuffer, 'X') != nullptr || strchr(cmdBuffer, 'Y') != nullptr || strchr(cmdBuffer, 'Z') != nullptr)
-      G1xyz();   //moves the robot to the given coordinates
-    else if(strchr(cmdBuffer, 'L') != nullptr || strchr(cmdBuffer, 'R') != nullptr)
-      G1lr();
+void handleAccel() {
+  const float incDecToDelay = (SLOWEST_SPEED_DELAY - DEFAULT_SPEED_DELAY) / (float)STEPS_TO_ACCEL_DECCEL;
+  if(traveledSteps < STEPS_TO_ACCEL_DECCEL) {
+    accelMode = 1;
+    currentSpeedDelay = SLOWEST_SPEED_DELAY;
   }
-  else if(strncmp(cmdBuffer, "G28", 3) == 0)    
-  {
-    // currentX = homeX;  //sets the current position to the home position
-    // currentY = homeY;
-    interpolateToPosition(currentX, currentY, homeX, homeY);    //moves to home position
-  }
-  else if(strncmp(cmdBuffer, "M17", 3) == 0)   
-    digitalWrite(enablePinLR, LOW);       //enables power to stepper motors
-  else if(strncmp(cmdBuffer, "M18", 3) == 0)   
-    digitalWrite(enablePinLR, HIGH);    //disable power to stepper motors
-  else if(strncmp(cmdBuffer, "G92", 3) == 0)   //sets the current coordinates without moving motors
-  {
-    if(strstr(cmdBuffer, "G92 H") != nullptr)
-    {
-      currentX = homeX;
-      currentY = homeY;
+  if(traveledSteps + STEPS_TO_ACCEL_DECCEL > totalLineSteps)
+    accelMode = -1;
+  if(accelMode == 1) {
+    currentSpeedDelay -= incDecToDelay;
+    if(currentSpeedDelay < DEFAULT_SPEED_DELAY) {
+      currentSpeedDelay = DEFAULT_SPEED_DELAY;
+      accelMode = 0;
     }
-    else
-    {
-      float xVal;
-      float yVal;
-      if(tryExtractFloat('X', &xVal))    //if proper values were sent
-        currentX = xVal;  //set current coordinates to sent coordinates
-      if(tryExtractFloat('Y', &yVal))
-        currentY = yVal;
+  } else if(accelMode == -1) {
+    currentSpeedDelay += incDecToDelay;
+    if(currentSpeedDelay > SLOWEST_SPEED_DELAY) {
+      currentSpeedDelay = SLOWEST_SPEED_DELAY;
+      accelMode = 0;
     }
   }
-
-  resetCommandBuffer();   //readies the buffer to receive a new command
+  ++traveledSteps;
 }
 
-
-//move to coordinates in a straight line
-//void moveToPosition(int x0, int y0, int x1, int y1)
-//calculate how much to move each motor, and slope of straight curve
-//move motors in correct relationship
-void interpolateToPosition(float x0, float y0, float x1, float y1, bool draw)   //overloaded draw function which also sets the pen position
-{
-  servoPenDraw(draw);
-  interpolateToPosition(x0, y0, x1, y1);
-}
-
-void interpolateToPosition(float x0, float y0, float x1, float y1)
-{
-  if(x1 >= 0 && y1 >= 0 && x1 <= canvasWidth && y1 <= canvasHeight)   //if the new position is within the robot bounds
-  {
-    digitalWrite(enablePinLR, LOW);      //enables power to stepper motors
-    float targetX = x1;
-    float targetY = y1;
-
-    float deltaX = targetX - x0;
-    float deltaY = targetY - y0;
-    float Tl = sqrt( pow(deltaX, 2) + pow(deltaY, 2) );   //total length to move
-
-    //this block is needed for calculating number of steps which is needed for accel/deccel
-    float hL0 = sqrt( pow(x0, 2) + pow(y0, 2) );    //calculate beginning left hypotenuse
-    float hR0 = sqrt( pow(canvasWidth - x0, 2) + pow(y0, 2) );    //calculate beginning right hypotenuse
-    float hL1 = sqrt( pow(targetX, 2) + pow(targetY, 2) );        //calculate end left hypotenuse
-    float hR1 = sqrt( pow(canvasWidth - targetX, 2) + pow(targetY, 2) );      //calculate end right hypotenuse
-    float deltahL = hL1 - hL0;    //calculate the total new distance for the left motor to move
-    float deltahR = hR1 - hR0;    //calculate the total new distance for the right motor to move
-    float deltaAbsMax = max(abs(deltahL), abs(deltahR));    //the longest distance one motor needs to move to reach the final point
-    totalLineSteps = deltaAbsMax / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
-    traveledSteps = 0;
-      
-    float distanceMoved = 0.0;
-    float stepSize = 10.0;    //max distance in mm the robot sends to the function moveToPosition
-      //by breaking the total length in smaller steps the line is kept straight, instead of getting a curve
-      //which happens when whole distance is sent to moveToPosition
-    
-    while(distanceMoved < Tl)   //while the robot has not moved the total length
-    {
-      if(distanceMoved > Tl - stepSize)   //exit case: if less than 10mm is left to move
-        stepSize = Tl - distanceMoved;    //set the stepSize equal to whatever length less than 10mm is left to move
-      
-      float nextX = x0 + deltaX*(stepSize/Tl);     //sets an intermediate point on the road to move to the total distance
-      float nextY = y0 + deltaY*(stepSize/Tl);     //sets an intermediate point on the road to move to the total distance
-      moveToPosition(x0, y0, nextX, nextY);     //moves 10mm on the road to the total distance
-      x0 = nextX;      //updates the start point for the next 10mm line
-      y0 = nextY;      //updates the start point for the next 10mm line
-      distanceMoved += stepSize;      //updates the length moved so far
-    }
-
-    currentX = targetX;
-    currentY = targetY;
-  }
-
-}
-
-
-void moveToPosition(float x0, float y0, float x1, float y1)
-{ 
-  //h = hypotenuse
-  float hL0 = sqrt( pow(x0, 2) + pow(y0, 2) );    //calculate beginning left hypotenuse
-  float hR0 = sqrt( pow(canvasWidth - x0, 2) + pow(y0, 2) );    //calculate beginning right hypotenuse
-  float hL1 = sqrt( pow(x1, 2) + pow(y1, 2) );        //calculate end left hypotenuse
-  float hR1 = sqrt( pow(canvasWidth - x1, 2) + pow(y1, 2) );      //calculate end right hypotenuse
-  float deltahL = hL1 - hL0;    //calculate the total new distance for the left motor to move
-  float deltahR = hR1 - hR0;    //calculate the total new distance for the right motor to move
- 
-  //this block determines the direction for the motors to spin
-  //depending on if the new hypotenuse is larger or smaller than the original
-  bool motorDirLong, motorDirShort, motorDirLeft, motorDirRight;
-  if(deltahL >= 0 && deltahR >= 0)        //0 0
-  {
-    motorDirLeft = true;
-    motorDirRight = true;
-  }
-  else if(deltahL >= 0 && deltahR < 0)    //0 1
-  {
-    motorDirLeft = true;
-    motorDirRight = false;
-  }
-  else if(deltahL < 0 && deltahR >= 0)    //1 0
-  {
-    motorDirLeft = false;
-    motorDirRight = true;
-  }
-  else    //(deltahL < 0 && deltahR < 0)  //1 1
-  {
-    motorDirLeft = false;
-    motorDirRight = false;
-  }
-
-  bool leftIsLongest;   //used to flag which motor moves the longest distance
-  if(abs(deltahL) >= abs(deltahR))
-  {
-    leftIsLongest = true;
-    motorDirLong = motorDirLeft;
-    motorDirShort = motorDirRight;
-  }
-  else 
-  {
-    leftIsLongest = false;
-    motorDirLong = motorDirRight;
-    motorDirShort = motorDirLeft;
-  }
-
-  float deltaAbsMin = min(abs(deltahL), abs(deltahR));    //the shortes distance one motor needs to move to reach the final point
-  float deltaAbsMax = max(abs(deltahL), abs(deltahR));    //the longest distance one motor needs to move to reach the final point
-
-  float nSteps = deltaAbsMax / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
-
-  float otherMotorThreshold = 0;  //used to trigger when the motor with shortest distance needs to move
-  float movementRatio = deltaAbsMin / deltaAbsMax;
-
-  for (int i = 0; i < nSteps; i++)          //disse to måtene å kjøre for-løkke på gir nøyaktig samme resultat
-  {
-    handleAccel();
-
-    pulseMotor(leftIsLongest, motorDirLong);    //moves the motor with the longest distance one step
-    otherMotorThreshold += movementRatio;   //increments the threshold determining when the shortest distance motor needs to move
-
-    if(otherMotorThreshold >= 1)
-    {
-      pulseMotor(!leftIsLongest, motorDirShort);    //moves the shortest distance motor one step
-      otherMotorThreshold -= 1;
-    }
-
-  }
-}
-
-void servoPenDraw(bool draw)   //moves the servo in a controlled and delayed fashion to avoid overshoots
-{
-  int servoNewPos;    //the position the servo should move to
-  int delayMS;  // = 12;   //16
-  if(draw)
-  {
-    servoNewPos = servoPosDraw;
-    // delayMS = 18;   //longer delay when the robot is about to draw to prevent swinging motion in the drawing
-    delayMS = servoDrawDelay;
-  }
-  else
-  {
-    servoNewPos = servoPosNoDraw;
-    delayMS = servoNoDrawDelay;
-  }
-
-  //increments or decrements the servo position until it's at the target position
-  //this is done in a loop with a delay to keep the servo movement slow and controlled which prevents the robot head from swinging
-  while(servoPosCurrent != servoNewPos)   //prevents the servo getting told to move to the position it's already in
-  {
-    if(servoNewPos > servoPosCurrent)
-      servoPosCurrent++;
-    else
-      servoPosCurrent--;
-    penServo.write(servoPosCurrent);
-    delay(delayMS);
-  }
-  // delay(4*delayMS);
-  delay(50);
-}
-
-void pulseMotor(bool leftMotor, bool moveDown)    //pulses one motor by one step 
-{
-  int stepPin, dirPin;
-  //selects the proper motor pin and direction pin based on boolean input in function
-  if(leftMotor)
-  {
-    stepPin = stepPinL;
-    dirPin = dirPinL;
-    moveDown = !moveDown;
-  }
-  else
-  {
-    stepPin = stepPinR;
-    dirPin = dirPinR;
-  }
-
-  //sends pulse to selected motor
-  digitalWrite(dirPin, moveDown);
+void pulseMotor(bool leftMotor, bool beltLengthening) {
+  const int stepPin = leftMotor ? stepPinL : stepPinR;
+  const int dirPin = leftMotor ? dirPinL : dirPinR;
+  // The left motor's physical direction is opposite the right motor's.
+  const bool driverDirection = leftMotor ? !beltLengthening : beltLengthening;
+  digitalWrite(dirPin, driverDirection);
   digitalWrite(stepPin, HIGH);
-  delayMicroseconds(currentSpeedDelay);            
+  delayMicroseconds((unsigned int)currentSpeedDelay);
   digitalWrite(stepPin, LOW);
-  delayMicroseconds(currentSpeedDelay);
-  
+  delayMicroseconds((unsigned int)currentSpeedDelay);
 }
 
-bool tryExtractFloat(char coordinateAxis, float *valueOut)
-{
-  char *axisPosition = strchr(cmdBuffer, coordinateAxis);
-  if(axisPosition == nullptr)
-    return false;
+bool executeStepTarget(const StepPosition &target) {
+  TwoAxisDda dda(currentSteps, target);
+  DdaTick tick;
+  const int32_t leftDirection = dda.leftDelta() < 0 ? -1 : 1;
+  const int32_t rightDirection = dda.rightDelta() < 0 ? -1 : 1;
+  while(dda.next(&tick)) {
+    handleAccel();
+    if(tick.pulse_left) {
+      pulseMotor(true, leftDirection > 0);
+      currentSteps.left += leftDirection;
+    }
+    if(tick.pulse_right) {
+      pulseMotor(false, rightDirection > 0);
+      currentSteps.right += rightDirection;
+    }
+  }
+  return currentSteps.left == target.left && currentSteps.right == target.right;
+}
 
-  axisPosition++;
-  while(*axisPosition == ' ')
-    axisPosition++;
+bool getCurrentCartesian(CartesianPoint *point) {
+  return stepsToCartesian(machineConfig, currentSteps, point);
+}
 
-  char firstChar = *axisPosition;
-  if(firstChar == '\0')
+bool setLogicalPosition(const CartesianPoint &point) {
+  StepPosition target;
+  if(!cartesianToSteps(machineConfig, point, &target))
     return false;
-  if((firstChar < '0' || firstChar > '9') && firstChar != '-' && firstChar != '+' && firstChar != '.')
-    return false;
-
-  *valueOut = atof(axisPosition);
+  currentSteps = target;
   return true;
 }
 
-void resetCommandBuffer()
-{
+bool executeCartesianLine(const CartesianPoint &target) {
+  if(!isInBounds(machineConfig, target)) {
+    printError("bounds:xy");
+    return false;
+  }
+  CartesianPoint start;
+  if(!getCurrentCartesian(&start)) {
+    printError("state:unresolvable");
+    return false;
+  }
+  const float deltaX = target.x_mm - start.x_mm;
+  const float deltaY = target.y_mm - start.y_mm;
+  const float length = sqrtf(deltaX * deltaX + deltaY * deltaY);
+  const uint16_t chordCount = length <= 0.0f ? 0 : (uint16_t)ceilf(length / MAX_CARTESIAN_CHORD_MM);
+
+  // Preflight every absolute target before enabling hardware or emitting a pulse.
+  StepPosition predicted = currentSteps;
+  float pulseCount = 0.0f;
+  for(uint16_t chord = 1; chord <= chordCount; ++chord) {
+    const float t = chord / (float)chordCount;
+    const CartesianPoint chordTarget = {start.x_mm + deltaX * t, start.y_mm + deltaY * t};
+    StepPosition targetSteps;
+    if(!cartesianToSteps(machineConfig, chordTarget, &targetSteps)) {
+      printError("bounds:chord");
+      return false;
+    }
+    TwoAxisDda planner(predicted, targetSteps);
+    pulseCount += planner.totalTicks();
+    predicted = targetSteps;
+  }
+
+  if(chordCount == 0)
+    return true;
+  totalLineSteps = pulseCount;
+  traveledSteps = 0.0f;
+  accelMode = 0;
+  digitalWrite(enablePinLR, LOW);
+  for(uint16_t chord = 1; chord <= chordCount; ++chord) {
+    const float t = chord / (float)chordCount;
+    const CartesianPoint chordTarget = {start.x_mm + deltaX * t, start.y_mm + deltaY * t};
+    StepPosition targetSteps;
+    if(!cartesianToSteps(machineConfig, chordTarget, &targetSteps) || !executeStepTarget(targetSteps)) {
+      printError("motion:planner");
+      return false;
+    }
+  }
+  return true;
+}
+
+void servoPenDraw(bool draw) {
+  const int target = draw ? servoPosDraw : servoPosNoDraw;
+  const int delayMs = draw ? servoDrawDelay : servoNoDrawDelay;
+  while(servoPosCurrent != target) {
+    servoPosCurrent += target > servoPosCurrent ? 1 : -1;
+    penServo.write(servoPosCurrent);
+    delay(delayMs);
+  }
+  delay(50);
+}
+
+bool hasCommand(const char *code) {
+  const size_t length = strlen(code);
+  return strncmp(cmdBuffer, code, length) == 0 &&
+      (cmdBuffer[length] == '\0' || cmdBuffer[length] == ' ' || cmdBuffer[length] == '\t');
+}
+
+void printError(const char *code) {
+  Serial.print("ERR ");
+  Serial.println(code);
+}
+
+void reportM503() {
+  Serial.print("M503 ANCHOR_SPAN:"); Serial.print(machineConfig.anchor_span_mm, 3);
+  Serial.print(" HOME_X:"); Serial.print(machineConfig.home_x_mm, 3);
+  Serial.print(" HOME_Y:"); Serial.print(machineConfig.home_y_mm, 3);
+  Serial.print(" WIDTH:"); Serial.print(machineConfig.canvas_width_mm, 3);
+  Serial.print(" HEIGHT:"); Serial.print(machineConfig.canvas_height_mm, 3);
+  Serial.print(" LEFT_MM_PER_MICROSTEP:"); Serial.print(machineConfig.left_mm_per_microstep, 7);
+  Serial.print(" RIGHT_MM_PER_MICROSTEP:"); Serial.println(machineConfig.right_mm_per_microstep, 7);
+}
+
+void handleGCODE() {
+  if(hasCommand("M115")) {
+    char response[190];
+    formatM115(response, sizeof(response));
+    Serial.println(response);
+    return;
+  }
+  if(hasCommand("M114")) {
+    char response[100];
+    formatM114(response, sizeof(response), machineConfig, currentSteps);
+    Serial.println(response);
+    return;
+  }
+  if(hasCommand("M503")) {
+    reportM503();
+    return;
+  }
+  if(hasCommand("G5")) {
+    printError("unsupported:G5_flatten_on_host");
+    return;
+  }
+  if(hasCommand("G1") || hasCommand("G01")) {
+    if(strchr(cmdBuffer, 'L') != nullptr || strchr(cmdBuffer, 'R') != nullptr) {
+      printError("unsupported:G1_LR");
+      return;
+    }
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    const AxisValueResult xResult = extractAxisFloat(cmdBuffer, 'X', &x);
+    const AxisValueResult yResult = extractAxisFloat(cmdBuffer, 'Y', &y);
+    const AxisValueResult zResult = extractAxisFloat(cmdBuffer, 'Z', &z);
+    if(xResult == AXIS_MALFORMED || yResult == AXIS_MALFORMED || zResult == AXIS_MALFORMED) {
+      printError("malformed:G1");
+      return;
+    }
+    if(xResult == AXIS_ABSENT && yResult == AXIS_ABSENT && zResult == AXIS_ABSENT) {
+      printError("malformed:G1_missing_axis");
+      return;
+    }
+    if(zResult == AXIS_VALID && z != 0.0f && z != 1.0f) {
+      printError("bounds:Z");
+      return;
+    }
+    CartesianPoint target;
+    if(xResult == AXIS_VALID || yResult == AXIS_VALID) {
+      if(!getCurrentCartesian(&target)) {
+        printError("state:unresolvable");
+        return;
+      }
+      if(xResult == AXIS_VALID) target.x_mm = x;
+      if(yResult == AXIS_VALID) target.y_mm = y;
+      if(!isInBounds(machineConfig, target)) {
+        printError("bounds:xy");
+        return;
+      }
+    }
+    if(zResult == AXIS_VALID)
+      servoPenDraw(z == 0.0f);
+    if(xResult == AXIS_VALID || yResult == AXIS_VALID)
+      executeCartesianLine(target);
+    return;
+  }
+  if(hasCommand("G28")) {
+    executeCartesianLine(CartesianPoint{machineConfig.home_x_mm, machineConfig.home_y_mm});
+    return;
+  }
+  if(hasCommand("M17")) {
+    digitalWrite(enablePinLR, LOW);
+    Serial.println("OK M17");
+    return;
+  }
+  if(hasCommand("M18")) {
+    digitalWrite(enablePinLR, HIGH);
+    Serial.println("OK M18");
+    return;
+  }
+  if(hasCommand("G92")) {
+    if(strstr(cmdBuffer, "G92 H") != nullptr) {
+      if(setLogicalPosition(CartesianPoint{machineConfig.home_x_mm, machineConfig.home_y_mm}))
+        Serial.println("OK G92 H");
+      else
+        printError("config:invalid");
+      return;
+    }
+    float x = 0.0f, y = 0.0f;
+    const AxisValueResult xResult = extractAxisFloat(cmdBuffer, 'X', &x);
+    const AxisValueResult yResult = extractAxisFloat(cmdBuffer, 'Y', &y);
+    if(xResult == AXIS_MALFORMED || yResult == AXIS_MALFORMED || (xResult == AXIS_ABSENT && yResult == AXIS_ABSENT)) {
+      printError("malformed:G92");
+      return;
+    }
+    CartesianPoint target;
+    if(!getCurrentCartesian(&target)) {
+      printError("state:unresolvable");
+      return;
+    }
+    if(xResult == AXIS_VALID) target.x_mm = x;
+    if(yResult == AXIS_VALID) target.y_mm = y;
+    if(!setLogicalPosition(target))
+      printError("bounds:G92");
+    else
+      Serial.println("OK G92");
+    return;
+  }
+  printError("unsupported:command");
+}
+
+void resetCommandBuffer() {
   cmdLength = 0;
   cmdBuffer[0] = '\0';
+  commandOverflow = false;
 }
-
-void G1xyz()
-{
-  float xVal = 0;
-  float yVal = 0;
-  float zVal = 0;
-  bool hasX = tryExtractFloat('X', &xVal);
-  bool hasY = tryExtractFloat('Y', &yVal);
-  bool hasZ = tryExtractFloat('Z', &zVal);
-
-  if(hasZ && (zVal == 1 || zVal == 0))    //if a z value was sent
-  {
-    if(hasX && hasY)    //if xy values also were sent
-      interpolateToPosition(currentX, currentY, xVal, yVal, zVal == 0);    //act on xy coordinates and z value
-    else
-      servoPenDraw(zVal == 0);           //act on z value alone
-  }
-  else    //if no z value was sent
-  {
-    if(hasX && hasY)    //and proper xy values were sent
-      interpolateToPosition(currentX, currentY, xVal, yVal);    //act on xy coordinates
-    else if(hasX)
-      interpolateToPosition(currentX, currentY, xVal, currentY);    //act on only x coordinate
-    else if(hasY)
-      interpolateToPosition(currentX, currentY, currentX, yVal);    //act on only y coordinate
-  }
-
-}
-
-void G1lr()
-{
-  float lVal = 0;
-  float rVal = 0;
-  bool hasL = tryExtractFloat('L', &lVal);
-  bool hasR = tryExtractFloat('R', &rVal);
-  float travelDistance = 0;
-  bool leftMotor;
-  if(hasL)
-  {
-    travelDistance = abs(lVal);
-    leftMotor = true;
-  }
-  else if(hasR)
-  {
-    travelDistance = abs(rVal);
-    leftMotor = false;
-  }
-  else
-    return;
-
-  bool moveDown = true;
-  if(strstr(cmdBuffer, "L-") != nullptr || strstr(cmdBuffer, "R-") != nullptr)
-      moveDown = false;
-  
-  float nSteps = travelDistance / Ts;    //number of steps to pulse = total length to move / distance moved with one pulse
-  for (int i = 0; i < nSteps; i++)  
-  {
-    handleAccel();
-    pulseMotor(leftMotor, moveDown);    //moves the motor with the longest distance one step
-  }
-    
-
-}
-
-void printXYfromHypo(float hL, float hR)    //used for debugging
-{
-  float x = (pow(hR, 2) - pow(hL, 2) - pow(canvasWidth, 2)) / (-2.0 * canvasWidth);
-  float y = sqrt(pow(hL, 2) - pow(x, 2));
-
-  Serial.print(x);
-  Serial.print(",");
-  Serial.println(y);
-}
-
-float getXfromHypo(float hL, float hR)    //used for debugging
-{
-  return (pow(hR, 2) - pow(hL, 2) - pow(canvasWidth, 2)) / (-2.0 * canvasWidth);
-}
-
-float getYfromHypo(float hL, float hR)    //used for debugging
-{
-  float x = (pow(hR, 2) - pow(hL, 2) - pow(canvasWidth, 2)) / (-2.0 * canvasWidth);
-  return sqrt(pow(hL, 2) - pow(x, 2));
-}
-
