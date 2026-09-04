@@ -6,6 +6,7 @@
 #include <string.h>
 #include <plottrbot/kinematics.h>
 #include <plottrbot/protocol.h>
+#include <plottrbot/controller_core.h>
 
 using namespace plottrbot;
 
@@ -34,8 +35,9 @@ MachineConfig machineConfig = {
   DEFAULT_MM_PER_MICROSTEP, DEFAULT_MM_PER_MICROSTEP
 };
 
-// This state is authoritative. It is updated only after a physical pulse.
-StepPosition currentSteps = {0, 0};
+// This state is authoritative. It remains unknown until the operator confirms
+// the physical homing key with G92 H.
+ControllerState controllerState = {false, {0, 0}};
 
 const int servoPosDraw = 100;
 const int servoPosNoDraw = 140;
@@ -64,10 +66,7 @@ void pulseMotor(bool leftMotor, bool beltLengthening);
 void servoPenDraw(bool draw);
 void printError(const char *code);
 bool executeStepTarget(const StepPosition &target);
-bool executeCartesianLine(const CartesianPoint &target);
-bool getCurrentCartesian(CartesianPoint *point);
-bool setLogicalPosition(const CartesianPoint &point);
-bool hasCommand(const char *code);
+bool executeCartesianLine(const CartesianMovePlan &motion);
 void reportM503();
 
 void setup() {
@@ -92,7 +91,7 @@ void setup() {
   rightStepperDriver.en_pwm_mode(true);
   rightStepperDriver.pwm_autoscale(true);
 
-  if(!setLogicalPosition(CartesianPoint{machineConfig.home_x_mm, machineConfig.home_y_mm}))
+  if(!isValidConfig(machineConfig))
     printError("config:invalid");
   Serial.println("Starting");
 }
@@ -156,7 +155,7 @@ void pulseMotor(bool leftMotor, bool beltLengthening) {
 }
 
 bool executeStepTarget(const StepPosition &target) {
-  TwoAxisDda dda(currentSteps, target);
+  TwoAxisDda dda(controllerState.steps, target);
   DdaTick tick;
   const int32_t leftDirection = dda.leftDelta() < 0 ? -1 : 1;
   const int32_t rightDirection = dda.rightDelta() < 0 ? -1 : 1;
@@ -164,68 +163,28 @@ bool executeStepTarget(const StepPosition &target) {
     handleAccel();
     if(tick.pulse_left) {
       pulseMotor(true, leftDirection > 0);
-      currentSteps.left += leftDirection;
+      controllerState.steps.left += leftDirection;
     }
     if(tick.pulse_right) {
       pulseMotor(false, rightDirection > 0);
-      currentSteps.right += rightDirection;
+      controllerState.steps.right += rightDirection;
     }
   }
-  return currentSteps.left == target.left && currentSteps.right == target.right;
+  return controllerState.steps.left == target.left && controllerState.steps.right == target.right;
 }
 
-bool getCurrentCartesian(CartesianPoint *point) {
-  return stepsToCartesian(machineConfig, currentSteps, point);
-}
-
-bool setLogicalPosition(const CartesianPoint &point) {
-  StepPosition target;
-  if(!cartesianToSteps(machineConfig, point, &target))
-    return false;
-  currentSteps = target;
-  return true;
-}
-
-bool executeCartesianLine(const CartesianPoint &target) {
-  if(!isInBounds(machineConfig, target)) {
-    printError("bounds:xy");
-    return false;
-  }
-  CartesianPoint start;
-  if(!getCurrentCartesian(&start)) {
-    printError("state:unresolvable");
-    return false;
-  }
-  const float deltaX = target.x_mm - start.x_mm;
-  const float deltaY = target.y_mm - start.y_mm;
-  const float length = sqrtf(deltaX * deltaX + deltaY * deltaY);
-  const uint16_t chordCount = length <= 0.0f ? 0 : (uint16_t)ceilf(length / MAX_CARTESIAN_CHORD_MM);
-
-  // Preflight every absolute target before enabling hardware or emitting a pulse.
-  StepPosition predicted = currentSteps;
-  float pulseCount = 0.0f;
-  for(uint16_t chord = 1; chord <= chordCount; ++chord) {
-    const float t = chord / (float)chordCount;
-    const CartesianPoint chordTarget = {start.x_mm + deltaX * t, start.y_mm + deltaY * t};
-    StepPosition targetSteps;
-    if(!cartesianToSteps(machineConfig, chordTarget, &targetSteps)) {
-      printError("bounds:chord");
-      return false;
-    }
-    TwoAxisDda planner(predicted, targetSteps);
-    pulseCount += planner.totalTicks();
-    predicted = targetSteps;
-  }
-
-  if(chordCount == 0)
+bool executeCartesianLine(const CartesianMovePlan &motion) {
+  if(motion.chord_count == 0)
     return true;
-  totalLineSteps = pulseCount;
+  totalLineSteps = motion.total_pulses;
   traveledSteps = 0.0f;
   accelMode = 0;
   digitalWrite(enablePinLR, LOW);
-  for(uint16_t chord = 1; chord <= chordCount; ++chord) {
-    const float t = chord / (float)chordCount;
-    const CartesianPoint chordTarget = {start.x_mm + deltaX * t, start.y_mm + deltaY * t};
+  const float deltaX = motion.target.x_mm - motion.start.x_mm;
+  const float deltaY = motion.target.y_mm - motion.start.y_mm;
+  for(uint16_t chord = 1; chord <= motion.chord_count; ++chord) {
+    const float t = chord / (float)motion.chord_count;
+    const CartesianPoint chordTarget = {motion.start.x_mm + deltaX * t, motion.start.y_mm + deltaY * t};
     StepPosition targetSteps;
     if(!cartesianToSteps(machineConfig, chordTarget, &targetSteps) || !executeStepTarget(targetSteps)) {
       printError("motion:planner");
@@ -246,12 +205,6 @@ void servoPenDraw(bool draw) {
   delay(50);
 }
 
-bool hasCommand(const char *code) {
-  const size_t length = strlen(code);
-  return strncmp(cmdBuffer, code, length) == 0 &&
-      (cmdBuffer[length] == '\0' || cmdBuffer[length] == ' ' || cmdBuffer[length] == '\t');
-}
-
 void printError(const char *code) {
   Serial.print("ERR ");
   Serial.println(code);
@@ -268,109 +221,43 @@ void reportM503() {
 }
 
 void handleGCODE() {
-  if(hasCommand("M115")) {
-    char response[190];
-    formatM115(response, sizeof(response));
-    Serial.println(response);
+  CommandPlan plan;
+  const char *error = nullptr;
+  if(!planCommand(cmdBuffer, machineConfig, controllerState, MAX_CARTESIAN_CHORD_MM, &plan, &error)) {
+    printError(error);
     return;
   }
-  if(hasCommand("M114")) {
-    char response[100];
-    formatM114(response, sizeof(response), machineConfig, currentSteps);
-    Serial.println(response);
-    return;
-  }
-  if(hasCommand("M503")) {
-    reportM503();
-    return;
-  }
-  if(hasCommand("G5")) {
-    printError("unsupported:G5_flatten_on_host");
-    return;
-  }
-  if(hasCommand("G1") || hasCommand("G01")) {
-    if(strchr(cmdBuffer, 'L') != nullptr || strchr(cmdBuffer, 'R') != nullptr) {
-      printError("unsupported:G1_LR");
-      return;
+  switch(plan.kind) {
+    case COMMAND_M115: {
+      char response[230]; formatM115(response, sizeof(response)); Serial.println(response); break;
     }
-    float x = 0.0f, y = 0.0f, z = 0.0f;
-    const AxisValueResult xResult = extractAxisFloat(cmdBuffer, 'X', &x);
-    const AxisValueResult yResult = extractAxisFloat(cmdBuffer, 'Y', &y);
-    const AxisValueResult zResult = extractAxisFloat(cmdBuffer, 'Z', &z);
-    if(xResult == AXIS_MALFORMED || yResult == AXIS_MALFORMED || zResult == AXIS_MALFORMED) {
-      printError("malformed:G1");
-      return;
+    case COMMAND_M114: {
+      char response[100]; formatM114(response, sizeof(response), machineConfig, controllerState.steps, controllerState.position_known); Serial.println(response); break;
     }
-    if(xResult == AXIS_ABSENT && yResult == AXIS_ABSENT && zResult == AXIS_ABSENT) {
-      printError("malformed:G1_missing_axis");
-      return;
+    case COMMAND_M503:
+      reportM503(); break;
+    case COMMAND_SAFE_DIAGNOSTIC: {
+      char response[150]; formatSafeDiagnostic(response, sizeof(response), machineConfig, MAX_CARTESIAN_CHORD_MM); Serial.println(response); break;
     }
-    if(zResult == AXIS_VALID && z != 0.0f && z != 1.0f) {
-      printError("bounds:Z");
-      return;
-    }
-    CartesianPoint target;
-    if(xResult == AXIS_VALID || yResult == AXIS_VALID) {
-      if(!getCurrentCartesian(&target)) {
-        printError("state:unresolvable");
-        return;
-      }
-      if(xResult == AXIS_VALID) target.x_mm = x;
-      if(yResult == AXIS_VALID) target.y_mm = y;
-      if(!isInBounds(machineConfig, target)) {
-        printError("bounds:xy");
-        return;
-      }
-    }
-    if(zResult == AXIS_VALID)
-      servoPenDraw(z == 0.0f);
-    if(xResult == AXIS_VALID || yResult == AXIS_VALID)
-      executeCartesianLine(target);
-    return;
+    case COMMAND_G92_HOME:
+      controllerState.steps = plan.home_steps;
+      controllerState.position_known = true;
+      Serial.println("OK G92 H");
+      break;
+    case COMMAND_G1:
+      if(plan.change_pen) servoPenDraw(plan.pen_draw);
+      if(plan.motion.chord_count > 0) executeCartesianLine(plan.motion);
+      break;
+    case COMMAND_G28:
+      if(plan.motion.chord_count > 0) executeCartesianLine(plan.motion);
+      break;
+    case COMMAND_M17:
+      digitalWrite(enablePinLR, LOW); Serial.println("OK M17"); break;
+    case COMMAND_M18:
+      digitalWrite(enablePinLR, HIGH); Serial.println("OK M18"); break;
+    default:
+      printError("internal:command_plan"); break;
   }
-  if(hasCommand("G28")) {
-    executeCartesianLine(CartesianPoint{machineConfig.home_x_mm, machineConfig.home_y_mm});
-    return;
-  }
-  if(hasCommand("M17")) {
-    digitalWrite(enablePinLR, LOW);
-    Serial.println("OK M17");
-    return;
-  }
-  if(hasCommand("M18")) {
-    digitalWrite(enablePinLR, HIGH);
-    Serial.println("OK M18");
-    return;
-  }
-  if(hasCommand("G92")) {
-    if(strstr(cmdBuffer, "G92 H") != nullptr) {
-      if(setLogicalPosition(CartesianPoint{machineConfig.home_x_mm, machineConfig.home_y_mm}))
-        Serial.println("OK G92 H");
-      else
-        printError("config:invalid");
-      return;
-    }
-    float x = 0.0f, y = 0.0f;
-    const AxisValueResult xResult = extractAxisFloat(cmdBuffer, 'X', &x);
-    const AxisValueResult yResult = extractAxisFloat(cmdBuffer, 'Y', &y);
-    if(xResult == AXIS_MALFORMED || yResult == AXIS_MALFORMED || (xResult == AXIS_ABSENT && yResult == AXIS_ABSENT)) {
-      printError("malformed:G92");
-      return;
-    }
-    CartesianPoint target;
-    if(!getCurrentCartesian(&target)) {
-      printError("state:unresolvable");
-      return;
-    }
-    if(xResult == AXIS_VALID) target.x_mm = x;
-    if(yResult == AXIS_VALID) target.y_mm = y;
-    if(!setLogicalPosition(target))
-      printError("bounds:G92");
-    else
-      Serial.println("OK G92");
-    return;
-  }
-  printError("unsupported:command");
 }
 
 void resetCommandBuffer() {

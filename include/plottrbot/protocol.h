@@ -29,7 +29,7 @@ inline AxisValueResult extractAxisFloat(const char *command, char axis, float *o
 
 inline void formatM115(char *out, size_t out_size) {
   snprintf(out, out_size,
-      "M115 FIRMWARE_NAME:PlottrBotUC FIRMWARE_VERSION:2026.09.03 PROTOCOL_VERSION:1 CAPABILITIES:ABS_STEP_MOTION,G1_XY,G92_HOME,M114_STEPS,G5_REJECTED");
+      "M115 FIRMWARE_NAME:PlottrBotUC FIRMWARE_VERSION:2026.09.03 PROTOCOL_VERSION:2 CAPABILITIES:ABS_STEP_MOTION,G1_XY,G92_HOME,HOME_CONFIRM_REQUIRED,M114_STEPS,SAFE_DIAGNOSTIC,G5_REJECTED");
 }
 
 inline void formatFixedMillimetres(char *out, size_t out_size, float value) {
@@ -45,16 +45,16 @@ inline void formatFixedMillimetres(char *out, size_t out_size, float value) {
   snprintf(out, out_size, "%s%lu.%03lu", negative ? "-" : "", (unsigned long)(magnitude / 1000U), (unsigned long)(magnitude % 1000U));
 }
 
-inline void formatM114(char *out, size_t out_size, const MachineConfig &config, const StepPosition &steps) {
+inline void formatM114(char *out, size_t out_size, const MachineConfig &config, const StepPosition &steps, bool position_known) {
   CartesianPoint point;
-  if(stepsToCartesian(config, steps, &point)) {
+  if(position_known && stepsToCartesian(config, steps, &point)) {
     char x[16];
     char y[16];
     formatFixedMillimetres(x, sizeof(x), point.x_mm);
     formatFixedMillimetres(y, sizeof(y), point.y_mm);
     snprintf(out, out_size, "M114 X:%s Y:%s L:%ld R:%ld", x, y, (long)steps.left, (long)steps.right);
   } else {
-    snprintf(out, out_size, "M114 X:UNKNOWN Y:UNKNOWN L:%ld R:%ld", (long)steps.left, (long)steps.right);
+    snprintf(out, out_size, "M114 X:UNKNOWN Y:UNKNOWN L:UNKNOWN R:UNKNOWN");
   }
 }
 
